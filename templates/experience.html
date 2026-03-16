@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="experience" class="section section--glass">
+    <div class="module module--experience">
+        <header class="module__header">
+            <h2 class="module__title">Experience</h2>
+            <p class="module__subtitle">Roles, projects and hands-on impact</p>
+        </header>
+
+        <div class="module__body">
+            <div class="experience__list">
+                {% if experience %}
+                {% for exp in experience %}
+                <article class="experience-card">
+                    <div class="experience-card__header">
+                        <h3 class="experience-card__role">{{ exp[1] }}</h3>
+                        <span class="experience-card__company">{{ exp[2] }}</span>
+                    </div>
+                    <p class="experience-card__duration">{{ exp[3] }}</p>
+                    <p class="experience-card__desc">{{ exp[4] }}</p>
+                </article>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state__text">No experience added yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

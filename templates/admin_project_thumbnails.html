@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin • Project Thumbnails</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
+</head>
+
+<body>
+    <header class="navbar">
+        <div class="navbar__brand">
+            <a href="{{ url_for('admin') }}" class="brand__link">
+                <span class="brand__logo">N</span>
+                <span class="brand__name">Nithin.dev</span>
+            </a>
+        </div>
+        <div class="navbar__actions">
+            <a href="{{ url_for('admin') }}" class="btn btn--ghost">Back to Admin</a>
+            <a href="{{ url_for('home') }}" class="btn btn--ghost">Back to Portfolio</a>
+        </div>
+    </header>
+
+    <main>
+        <section class="dashboard-grid">
+            <article class="module module--span-2">
+                <header class="module__header">
+                    <h2 class="module__title">Manage Project Thumbnails</h2>
+                    <p class="module__subtitle">These appear in the homepage sliding section.</p>
+                </header>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="alert-grid">
+                    {% for category, message in messages %}
+                    <div class="alert alert--{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                {% if thumbnails %}
+                <div class="projects__grid">
+                    {% for item in thumbnails %}
+                    <article class="project-card">
+                        <div class="project-card__image">
+                            <img src="{{ url_for('uploaded_project_thumbnail', filename=item.image_file) }}" alt="{{ item.title }}">
+                        </div>
+                        <h3 class="project-card__title">{{ item.title }}</h3>
+                        <div class="project-card__links">
+                            <form action="{{ url_for('delete_project_thumbnail', thumb_id=item.id) }}" method="post">
+                                <button type="submit" class="btn btn--ghost btn--small"
+                                    onclick="return confirm('Delete this thumbnail?');">Delete</button>
+                            </form>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state__text">No thumbnails added yet.</p>
+                </div>
+                {% endif %}
+            </article>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p class="footer__copy">© 2026 Nithin.dev — Admin</p>
+    </footer>
+</body>
+
+</html>
+

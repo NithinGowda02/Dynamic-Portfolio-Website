@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin • Skills</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
+</head>
+
+<body>
+    <header class="navbar">
+        <div class="navbar__brand">
+            <a href="{{ url_for('admin') }}" class="brand__link">
+                <span class="brand__logo">N</span>
+                <span class="brand__name">Nithin.dev</span>
+            </a>
+        </div>
+        <div class="navbar__actions">
+            <a href="{{ url_for('admin') }}" class="btn btn--ghost">Back to Admin</a>
+            <a href="{{ url_for('home') }}" class="btn btn--ghost">Back to Portfolio</a>
+        </div>
+    </header>
+
+    <main>
+        <section class="dashboard-grid">
+            <article class="module module--span-2">
+                <header class="module__header">
+                    <h2 class="module__title">Manage Skills</h2>
+                    <p class="module__subtitle">Hover a skill to delete it.</p>
+                </header>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="alert-grid">
+                    {% for category, message in messages %}
+                    <div class="alert alert--{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                {% if skills %}
+                <div class="skill-badges">
+                    {% for skill in skills %}
+                    <div class="skill-chip" title="Hover to delete">
+                        <span class="skill-badge">{{ skill[1] }}</span>
+                        <form action="{{ url_for('delete_skill', skill_id=skill[0]) }}" method="post">
+                            <button type="submit" class="skill-chip__delete"
+                                aria-label="Delete skill"
+                                title="Delete"
+                                onclick="return confirm('Delete this skill?');">x</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state__text">No skills added yet.</p>
+                </div>
+                {% endif %}
+            </article>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p class="footer__copy">© 2026 Nithin.dev — Admin</p>
+    </footer>
+</body>
+
+</html>

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="contact" class="section section--glass">
+    <div class="module module--contact module--span-2">
+        <header class="module__header">
+            <h2 class="module__title">Contact</h2>
+            <p class="module__subtitle">Send a message</p>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="alert-grid">
+            {% for category, message in messages %}
+            <div class="alert alert--{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <form class="form" action="{{ url_for('contact_page') }}" method="post">
+            <label class="form__label">
+                <span>Name</span>
+                <input class="form__input" type="text" name="name" placeholder="Your name" required>
+            </label>
+
+            <label class="form__label">
+                <span>Email</span>
+                <input class="form__input" type="email" name="email" placeholder="you@example.com" required>
+            </label>
+
+            <label class="form__label">
+                <span>Message</span>
+                <textarea class="form__input" name="message" rows="5" placeholder="Hi Nithin, ..." required></textarea>
+            </label>
+
+            <button type="submit" class="btn btn--primary">Send Message</button>
+        </form>
+
+        {% if profile %}
+        <div class="contact__links">
+            {% if profile[4] %}
+            <a href="mailto:{{ profile[4] }}" class="btn btn--secondary">Email Me</a>
+            {% endif %}
+            {% if profile[5] %}
+            <a href="{{ profile[5] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">GitHub</a>
+            {% endif %}
+            {% if profile[6] %}
+            <a href="{{ profile[6] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">LinkedIn</a>
+            {% endif %}
+            {% if profile[7] %}
+            <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="btn btn--secondary" target="_blank">Download Resume</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+

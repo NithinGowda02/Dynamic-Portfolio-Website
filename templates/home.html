@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero hero--v2">
+    <div class="hero__card hero__card--v2">
+        <div class="hero__content hero__content--v2">
+            <p class="hero__pretitle">Welcome to my portfolio</p>
+            <h1 class="hero__title">Hello, my name is {{ profile[1] if profile else 'Nithin' }}.</h1>
+            <p class="hero__subtitle">{{ profile[2] if profile else 'Python Developer | ML Enthusiast' }}</p>
+
+            <div class="hero__actions">
+                {% if profile and profile[7] %}
+                <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="btn btn--primary" download>Download Resume</a>
+                {% else %}
+                <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" download>Download Resume</a>
+                {% endif %}
+                <a href="#projects" class="btn btn--secondary">See My Work</a>
+            </div>
+        </div>
+
+        <div class="hero__visual hero__visual--v2">
+            <div class="profile-frame" aria-hidden="false">
+                <div class="profile-frame__inner">
+                    {% if profile and profile[8] %}
+                    <img class="profile-frame__img" src="{{ url_for('uploaded_profile', filename=profile[8]) }}"
+                        alt="{{ profile[1] if profile else 'Nithin' }}">
+                    {% else %}
+                    <img class="profile-frame__img" src="{{ url_for('static', filename='images/Profile.jpg') }}"
+                        alt="{{ profile[1] if profile else 'Nithin' }}">
+                    {% endif %}
+                </div>
+                <span class="profile-frame__orb profile-frame__orb--a"></span>
+                <span class="profile-frame__orb profile-frame__orb--b"></span>
+                <span class="profile-frame__orb profile-frame__orb--c"></span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="about" class="section about-bridge">
+    <div class="about-bridge__wrap">
+        <div class="about-bridge__sticker">
+            {% if about_intro and about_intro.about_image %}
+            <img src="{{ url_for('uploaded_about', filename=about_intro.about_image) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            {% elif profile and profile[8] %}
+            <img src="{{ url_for('uploaded_profile', filename=profile[8]) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            {% else %}
+            <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            {% endif %}
+        </div>
+
+        <div class="about-bridge__card section--glass" data-stats>
+            <div class="about-bridge__content">
+                <div>
+                    <h2 class="about-bridge__title">{{ about_intro.headline if about_intro and about_intro.headline else 'My Name is Nithin K P' }}</h2>
+                    <p class="about-bridge__role">{{ about_intro.role_line if about_intro and about_intro.role_line else 'Python Developer | Web Development' }}</p>
+                    <p class="about-bridge__desc">
+                        {{ about_intro.short_desc if about_intro and about_intro.short_desc else 'I enjoy building backend systems using Python and exploring machine learning applications through practical projects.' }}
+                    </p>
+                    <div class="module__actions">
+                        <a href="{{ url_for('about_page') }}" class="btn btn--secondary">Learn More</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid stats-grid--compact">
+                <article class="stat-card">
+                    <div class="stat-card__num" data-countup="{{ stats.projects if stats else 0 }}">0</div>
+                    <div class="stat-card__label">Projects</div>
+                </article>
+                <article class="stat-card">
+                    <div class="stat-card__num" data-countup="{{ stats.skills if stats else 0 }}">0</div>
+                    <div class="stat-card__label">Skills</div>
+                </article>
+                <article class="stat-card">
+                    <div class="stat-card__num" data-countup="{{ stats.certifications if stats else 0 }}">0</div>
+                    <div class="stat-card__label">Certifications</div>
+                </article>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section--glass" id="project-thumbnails">
+    <div class="module module--projects">
+        <header class="module__header">
+            <h2 class="module__title">Project Thumbnails</h2>
+            <p class="module__subtitle">A quick visual peek</p>
+        </header>
+
+        <div class="project-slider" id="projectSlider">
+            <div class="project-slider__track">
+                {% if project_thumbnails %}
+                {% for item in project_thumbnails %}
+                <div class="slide">
+                    <img src="{{ url_for('uploaded_project_thumbnail', filename=item.image_file) }}" alt="{{ item.title }} thumbnail">
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="slide">
+                    <div class="slide__placeholder">
+                        <div class="slide__ph-title">Add thumbnails in Admin</div>
+                        <div class="slide__ph-sub">They will show up here automatically</div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="project-slider__dots" id="sliderDots"></div>
+        </div>
+    </div>
+</section>
+
+<section id="projects" class="section section--glass">
+    <div class="module module--projects">
+        <header class="module__header">
+            <h2 class="module__title">Projects</h2>
+            <p class="module__subtitle">Selected work</p>
+        </header>
+
+        <div class="projects__grid">
+            {% if projects %}
+            {% for project in projects[:6] %}
+            <article class="project-card">
+                {% set imgs = project.images if project.images else ([project.cover_image] if project.cover_image else []) %}
+                {% if imgs %}
+                <div class="project-card__image">
+                    <div class="proj-gallery proj-gallery--card" data-gallery>
+                        <button class="proj-gallery__nav proj-gallery__nav--prev" type="button" aria-label="Previous image" data-gallery-prev>&lsaquo;</button>
+                        <button class="proj-gallery__nav proj-gallery__nav--next" type="button" aria-label="Next image" data-gallery-next>&rsaquo;</button>
+                        <div class="proj-gallery__viewport" data-gallery-viewport>
+                            <div class="proj-gallery__track" data-gallery-track>
+                                {% for img in imgs[:6] %}
+                                <div class="proj-gallery__slide" data-gallery-slide>
+                                    <img src="{{ url_for('uploaded_project', filename=img) }}" alt="{{ project.title }} screenshot {{ loop.index }}">
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="proj-gallery__dots" data-gallery-dots></div>
+                    </div>
+                </div>
+                {% endif %}
+                <h3 class="project-card__title">{{ project.title }}</h3>
+                <p class="project-card__copy">{{ project.description | truncate(140, True, '...') }}</p>
+                {% if project.tech_stack %}
+                <div class="project-card__tech-badges">
+                    {% for tech in project.tech_stack.split(',') %}
+                    <span class="tech-badge">{{ tech.strip() }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="project-card__links">
+                    <a href="{{ url_for('projects_page') }}#project-{{ project.id }}" class="btn btn--ghost btn--small">
+                        Know More
+                    </a>
+                    {% if project.github_link %}
+                    <a href="{{ project.github_link }}" class="btn btn--secondary btn--small" target="_blank" rel="noreferrer noopener">
+                        View Code
+                    </a>
+                    {% endif %}
+                    {% if project.live_demo %}
+                    <a href="{{ project.live_demo }}" class="btn btn--primary btn--small" target="_blank" rel="noreferrer noopener">
+                        Live Demo
+                    </a>
+                    {% endif %}
+                </div>
+            </article>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <p class="empty-state__text">No projects have been added yet.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="module__actions">
+            <a href="{{ url_for('projects_page') }}" class="btn btn--ghost">View All Projects</a>
+        </div>
+    </div>
+</section>
+
+<section id="skills" class="section section--glass">
+    <div class="module module--skills">
+        <header class="module__header">
+            <h2 class="module__title">Skills & Technology Stack</h2>
+            <p class="module__subtitle">Tools & languages I use every day</p>
+        </header>
+
+        <div class="module__body">
+            <div class="skills-grid">
+                {% if skills %}
+                {% set items = skills %}
+                {% else %}
+                {% set items = ['Python','Flask','SQL','HTML','CSS','JavaScript','Machine Learning','Git'] %}
+                {% endif %}
+
+                {% for item in items %}
+                {% set skill_name = item[1] if skills else item %}
+                {% set lower = skill_name | lower %}
+                {% set icon = 'images/skills/default.svg' %}
+                {% if 'python' in lower %}
+                {% set icon = 'images/skills/python.svg' %}
+                {% elif 'flask' in lower %}
+                {% set icon = 'images/skills/flask.svg' %}
+                {% elif 'sql' in lower %}
+                {% set icon = 'images/skills/sql.svg' %}
+                {% elif 'html' in lower %}
+                {% set icon = 'images/skills/html.svg' %}
+                {% elif 'css' in lower %}
+                {% set icon = 'images/skills/css.svg' %}
+                {% elif 'javascript' in lower or 'js' == lower %}
+                {% set icon = 'images/skills/javascript.svg' %}
+                {% elif 'git' in lower %}
+                {% set icon = 'images/skills/git.svg' %}
+                {% elif 'machine learning' in lower or 'ml' == lower %}
+                {% set icon = 'images/skills/ml.svg' %}
+                {% endif %}
+
+                <article class="skill-card3d">
+                    <div class="skill-card3d__icon">
+                        <img src="{{ url_for('static', filename=icon) }}" alt="{{ skill_name }} logo" loading="lazy">
+                    </div>
+                    <div class="skill-card3d__name">{{ skill_name }}</div>
+                </article>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="module__actions">
+            <a href="{{ url_for('skills_page') }}" class="btn btn--ghost">View All Skills</a>
+        </div>
+    </div>
+</section>
+
+<section id="experience" class="section section--glass">
+    <div class="module module--experience">
+        <header class="module__header">
+            <h2 class="module__title">Experience</h2>
+            <p class="module__subtitle">Roles, projects and hands-on impact</p>
+        </header>
+
+        <div class="module__body">
+            <div class="experience__list">
+                {% if experience %}
+                {% for exp in experience %}
+                <article class="experience-card">
+                    <div class="experience-card__header">
+                        <h3 class="experience-card__role">{{ exp[1] }}</h3>
+                        <span class="experience-card__company">{{ exp[2] }}</span>
+                    </div>
+                    <p class="experience-card__duration">{{ exp[3] }}</p>
+                    <p class="experience-card__desc">{{ exp[4] }}</p>
+                </article>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state__text">No experience added yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="module__actions">
+            <a href="{{ url_for('experience_page') }}" class="btn btn--ghost">View Experience Page</a>
+        </div>
+    </div>
+</section>
+
+<section id="certifications" class="section section--glass">
+    <div class="module module--certifications module--span-2">
+        <header class="module__header">
+            <h2 class="module__title">Certifications</h2>
+            <p class="module__subtitle">Verified credentials & certificates</p>
+        </header>
+
+        <div class="certifications__grid">
+            {% if certifications %}
+            {% for cert in certifications %}
+            <article class="cert-card">
+                <div class="cert-card__meta">
+                    <h3 class="cert-card__title">{{ cert[1] }}</h3>
+                    <span class="cert-card__platform">{{ cert[2] }}</span>
+                </div>
+                <p class="cert-card__year">{{ cert[3] }}</p>
+                <a href="{{ url_for('uploaded_certificate', filename=cert[4]) }}" target="_blank"
+                    class="btn btn--secondary btn--small">
+                    View Certificate
+                </a>
+            </article>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <p class="empty-state__text">No certifications added yet.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="module__actions">
+            <a href="{{ url_for('certifications_page') }}" class="btn btn--ghost">View All Certifications</a>
+        </div>
+    </div>
+</section>
+
+<section id="contact" class="section section--glass">
+    <div class="module module--contact module--span-2">
+        <header class="module__header">
+            <h2 class="module__title">Contact</h2>
+            <p class="module__subtitle">Send a message</p>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="alert-grid">
+            {% for category, message in messages %}
+            <div class="alert alert--{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <form class="form" action="{{ url_for('contact_page', next='home') }}" method="post">
+            <label class="form__label">
+                <span>Name</span>
+                <input class="form__input" type="text" name="name" placeholder="Your name" required>
+            </label>
+
+            <label class="form__label">
+                <span>Email</span>
+                <input class="form__input" type="email" name="email" placeholder="you@example.com" required>
+            </label>
+
+            <label class="form__label">
+                <span>Message</span>
+                <textarea class="form__input" name="message" rows="5" placeholder="Hi Nithin, ..." required></textarea>
+            </label>
+
+            <button type="submit" class="btn btn--primary">Send Message</button>
+        </form>
+
+        {% if profile %}
+        <div class="contact__links">
+            {% if profile[4] %}
+            <a href="mailto:{{ profile[4] }}" class="btn btn--secondary">Email Me</a>
+            {% endif %}
+            {% if profile[5] %}
+            <a href="{{ profile[5] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">GitHub</a>
+            {% endif %}
+            {% if profile[6] %}
+            <a href="{{ profile[6] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">LinkedIn</a>
+            {% endif %}
+            {% if profile[7] %}
+            <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="btn btn--secondary" target="_blank">Download Resume</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update Profile - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Update Profile</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="alert-grid">
+            {% for category, message in messages %}
+            <div class="alert alert--{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        <form method="POST" class="form">
+            <label class="form__label">
+                <span>Name:</span>
+                <input type="text" class="form__input" id="name" name="name" value="{{ profile[1] if profile else '' }}" required>
+            </label>
+            <label class="form__label">
+                <span>Title:</span>
+                <input type="text" class="form__input" id="title" name="title" value="{{ profile[2] if profile else '' }}" required>
+            </label>
+            <label class="form__label">
+                <span>About:</span>
+                <textarea class="form__input" id="about" name="about" rows="5" required>{{ profile[3] if profile else '' }}</textarea>
+            </label>
+            <label class="form__label">
+                <span>Email:</span>
+                <input type="email" class="form__input" id="email" name="email" value="{{ profile[4] if profile else '' }}">
+            </label>
+            <label class="form__label">
+                <span>GitHub:</span>
+                <input type="url" class="form__input" id="github" name="github" value="{{ profile[5] if profile else '' }}">
+            </label>
+            <label class="form__label">
+                <span>LinkedIn:</span>
+                <input type="url" class="form__input" id="linkedin" name="linkedin" value="{{ profile[6] if profile else '' }}">
+            </label>
+            <div class="form__actions">
+                <button type="submit" class="btn">Update Profile</button>
+            </div>
+        </form>
+        <a href="{{ url_for('admin') }}" class="btn">Back to Admin</a>
+    </div>
+
+    <footer class="footer">
+        <p class="footer__copy">© 2026 Nithin.dev — Admin</p>
+    </footer>
+</body>
+</html>

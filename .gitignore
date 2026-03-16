@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+
+# Local SQLite artifacts
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Uploads are user-generated content (keep out of git)
+uploads/
+
+# Local data DBs
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Windows noise
+Thumbs.db
+Desktop.ini
+

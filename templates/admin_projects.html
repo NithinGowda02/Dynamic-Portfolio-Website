@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin • Projects</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
+</head>
+
+<body>
+    <header class="navbar">
+        <div class="navbar__brand">
+            <a href="{{ url_for('admin') }}" class="brand__link">
+                <span class="brand__logo">N</span>
+                <span class="brand__name">Nithin.dev</span>
+            </a>
+        </div>
+        <div class="navbar__actions">
+            <a href="{{ url_for('admin') }}" class="btn btn--ghost">Back to Admin</a>
+            <a href="{{ url_for('home') }}" class="btn btn--ghost">Back to Portfolio</a>
+        </div>
+    </header>
+
+    <main>
+        <section class="dashboard-grid">
+            <article class="module module--span-2">
+                <header class="module__header">
+                    <h2 class="module__title">Manage Projects</h2>
+                    <p class="module__subtitle">Delete projects and their screenshots.</p>
+                </header>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="alert-grid">
+                    {% for category, message in messages %}
+                    <div class="alert alert--{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                {% if projects %}
+                <div class="projects__grid">
+                    {% for project in projects %}
+                    <article class="project-card">
+                        {% if project.cover_image %}
+                        <div class="project-card__image">
+                            <img src="{{ url_for('uploaded_project', filename=project.cover_image) }}" alt="{{ project.title }}">
+                        </div>
+                        {% endif %}
+                        <h3 class="project-card__title">{{ project.title }}</h3>
+                        <p class="project-card__copy" style="color: rgba(229, 231, 255, 0.7);">
+                            Images: {{ (project.images | length) if project.images else (1 if project.cover_image else 0) }}
+                        </p>
+                        <div class="project-card__links">
+                            <a class="btn btn--ghost btn--small" href="{{ url_for('projects_page') }}#project-{{ project.id }}" target="_blank"
+                                rel="noreferrer noopener">Open</a>
+                            <form action="{{ url_for('delete_project', project_id=project.id) }}" method="post">
+                                <button type="submit" class="btn btn--ghost btn--small"
+                                    onclick="return confirm('Delete this project and all its images?');">Delete</button>
+                            </form>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state__text">No projects added yet.</p>
+                </div>
+                {% endif %}
+            </article>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p class="footer__copy">© 2026 Nithin.dev — Admin</p>
+    </footer>
+</body>
+
+</html>
+

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section about-bridge about-bridge--page">
+    <div class="about-bridge__wrap">
+        <div class="about-bridge__sticker">
+            {% if about_intro and about_intro.about_image %}
+            <img src="{{ url_for('uploaded_about', filename=about_intro.about_image) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            {% elif profile and profile[8] %}
+            <img src="{{ url_for('uploaded_profile', filename=profile[8]) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            {% else %}
+            <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            {% endif %}
+        </div>
+
+        <div class="about-bridge__card section--glass">
+            <div class="about-bridge__content">
+                <div>
+                    <h2 class="about-bridge__title">{{ about_intro.headline if about_intro and about_intro.headline else 'My Name is Nithin K P' }}</h2>
+                    <p class="about-bridge__role">{{ about_intro.role_line if about_intro and about_intro.role_line else 'Python Developer | Web Development' }}</p>
+                    <p class="about-bridge__desc">
+                        {{ about_intro.short_desc if about_intro and about_intro.short_desc else 'I enjoy building backend systems using Python and exploring machine learning applications through practical projects.' }}
+                    </p>
+                    <div class="module__actions">
+                        <a href="{{ url_for('projects_page') }}" class="btn btn--secondary">See My Work</a>
+                        <a href="{{ url_for('contact_page') }}" class="btn btn--ghost">Let's Connect</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid stats-grid--compact" data-stats>
+                <article class="stat-card">
+                    <div class="stat-card__num" data-countup="{{ stats.projects if stats else 0 }}">0</div>
+                    <div class="stat-card__label">Projects</div>
+                </article>
+                <article class="stat-card">
+                    <div class="stat-card__num" data-countup="{{ stats.skills if stats else 0 }}">0</div>
+                    <div class="stat-card__label">Skills</div>
+                </article>
+                <article class="stat-card">
+                    <div class="stat-card__num" data-countup="{{ stats.certifications if stats else 0 }}">0</div>
+                    <div class="stat-card__label">Certifications</div>
+                </article>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section--glass">
+    <div class="module module--about">
+        <header class="module__header">
+            <h2 class="module__title">About Me</h2>
+            <p class="module__subtitle">A deeper introduction</p>
+        </header>
+
+        <div class="module__body">
+            {% if about_content and about_content.details_text %}
+            {% for para in about_content.details_text.split('\n') %}
+            {% if para.strip() %}
+            <p class="section__copy">{{ para }}</p>
+            {% endif %}
+            {% endfor %}
+            {% elif profile and profile[3] %}
+            {% for para in profile[3].split('\n') %}
+            {% if para.strip() %}
+            <p class="section__copy">{{ para }}</p>
+            {% endif %}
+            {% endfor %}
+            {% else %}
+            <p class="section__copy">
+                I’m a developer who enjoys building reliable backend systems in Python, exploring machine learning, and shipping polished web experiences.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

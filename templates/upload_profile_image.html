@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Profile Image - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Upload Profile Image</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="alert-grid">
+            {% for category, message in messages %}
+            <div class="alert alert--{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        <form method="POST" enctype="multipart/form-data" class="form">
+            <label class="form__label">
+                <span>Profile Image</span>
+                <input type="file" class="form__input" name="profile_image" accept="image/*" required>
+            </label>
+            <div class="form__actions">
+                <button type="submit" class="btn">Upload Profile Image</button>
+            </div>
+        </form>
+        <a href="{{ url_for('admin') }}" class="btn">Back to Admin</a>
+    </div>
+
+    <footer class="footer">
+        <p class="footer__copy">© 2026 Nithin.dev — Admin</p>
+    </footer>
+</body>
+</html>

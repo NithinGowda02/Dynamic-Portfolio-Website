@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title if page_title else 'Nithin.dev - Portfolio' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
+</head>
+
+<body>
+
+<header class="navbar">
+    <div class="navbar__brand">
+        <a href="{{ url_for('home') }}" class="brand__link">
+            <span class="brand__logo">N</span>
+            <span class="brand__name">Nithin.dev</span>
+        </a>
+    </div>
+
+    <nav class="navbar__nav" id="mainNav">
+        <ul class="nav__list">
+            <li class="nav__item"><a href="{{ url_for('home') }}" class="nav__link">Home</a></li>
+            <li class="nav__item"><a href="{{ url_for('about_page') }}" class="nav__link">About</a></li>
+            <li class="nav__item"><a href="{{ url_for('projects_page') }}" class="nav__link">Projects</a></li>
+            <li class="nav__item"><a href="{{ url_for('skills_page') }}" class="nav__link">Skills</a></li>
+            <li class="nav__item"><a href="{{ url_for('experience_page') }}" class="nav__link">Experience</a></li>
+            <li class="nav__item"><a href="{{ url_for('certifications_page') }}" class="nav__link">Certifications</a></li>
+            <li class="nav__item"><a href="{{ url_for('contact_page') }}" class="nav__link">Contact</a></li>
+        </ul>
+    </nav>
+
+    <div class="navbar__actions">
+        {% if profile and profile[7] %}
+        <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="btn btn--primary" download>Resume</a>
+        {% else %}
+        <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" download>Resume</a>
+        {% endif %}
+        {% if session.get('admin_logged_in') %}
+        <a href="{{ url_for('admin') }}" class="btn btn--secondary">Admin</a>
+        {% else %}
+        <a href="{{ url_for('admin_login') }}" class="btn btn--secondary">Admin</a>
+        {% endif %}
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+            <span class="nav-toggle__bar"></span>
+            <span class="nav-toggle__bar"></span>
+            <span class="nav-toggle__bar"></span>
+        </button>
+    </div>
+</header>
+
+<main>
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="footer footer--pro" role="contentinfo">
+    <div class="footer__bg" aria-hidden="true">
+        <span class="footer__glow footer__glow--a"></span>
+        <span class="footer__glow footer__glow--b"></span>
+        <span class="footer__glow footer__glow--c"></span>
+    </div>
+
+    <div class="footer__inner">
+        <div class="footer__grid">
+            <section class="footer__col footer__social">
+                <h3 class="footer__title">Connect</h3>
+                <div class="footer__icons" aria-label="Social links">
+                    {% if profile and profile[5] %}
+                    <a class="footer__iconlink" href="{{ profile[5] }}" target="_blank" rel="noreferrer noopener" aria-label="GitHub">
+                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                            <path fill="currentColor"
+                                d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.77.6-3.35-1.17-3.35-1.17-.45-1.15-1.1-1.46-1.1-1.46-.9-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.33 1.09 2.9.84.09-.65.35-1.09.63-1.34-2.21-.25-4.54-1.11-4.54-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 6.8c.85 0 1.71.12 2.51.35 1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.76c0 .27.18.58.69.48A10 10 0 0 0 12 2z" />
+                        </svg>
+                        <span class="sr-only">GitHub</span>
+                    </a>
+                    {% endif %}
+
+                    {% if profile and profile[6] %}
+                    <a class="footer__iconlink" href="{{ profile[6] }}" target="_blank" rel="noreferrer noopener" aria-label="LinkedIn">
+                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                            <path fill="currentColor"
+                                d="M4.98 3.5A2.5 2.5 0 1 1 5 8.5a2.5 2.5 0 0 1-.02-5zM3 9h4v12H3V9zm7 0h3.8v1.64h.05c.53-.95 1.82-1.95 3.75-1.95 4.01 0 4.75 2.64 4.75 6.08V21h-4v-5.27c0-1.26-.02-2.89-1.76-2.89-1.76 0-2.03 1.38-2.03 2.8V21h-4V9z" />
+                        </svg>
+                        <span class="sr-only">LinkedIn</span>
+                    </a>
+                    {% endif %}
+
+                    {% if profile and profile[4] %}
+                    <a class="footer__iconlink" href="mailto:{{ profile[4] }}" aria-label="Email">
+                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                            <path fill="currentColor"
+                                d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z" />
+                        </svg>
+                        <span class="sr-only">Email</span>
+                    </a>
+                    {% endif %}
+
+                    {% if profile and profile[7] %}
+                    <a class="footer__iconlink" href="{{ url_for('uploaded_resume', filename=profile[7]) }}" download aria-label="Download Resume">
+                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                            <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18-5.5 5.5 1.42 1.42L11 6.84V16h2V6.84l3.08 3.08 1.42-1.42L12 2z" />
+                        </svg>
+                        <span class="sr-only">Resume</span>
+                    </a>
+                    {% else %}
+                    <a class="footer__iconlink" href="{{ url_for('static', filename='resume.pdf') }}" download aria-label="Download Resume">
+                        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                            <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18-5.5 5.5 1.42 1.42L11 6.84V16h2V6.84l3.08 3.08 1.42-1.42L12 2z" />
+                        </svg>
+                        <span class="sr-only">Resume</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="footer__col footer__cta">
+                <h3 class="footer__title">Let's Build</h3>
+                <p class="footer__cta-text">Have an idea, project, or opportunity? Feel free to connect with me.</p>
+                <a class="btn btn--primary footer__cta-btn" href="{{ url_for('home') }}#contact">Contact Me</a>
+            </section>
+        </div>
+
+        <div class="footer__bottom">
+            <div class="footer__copy">&copy; 2026 {{ profile[1] if profile else 'Nithin.dev' }}. Built with Flask.</div>
+            <a class="footer__top" href="{{ url_for('home') }}">Back to top</a>
+        </div>
+    </div>
+</footer>
+
+<script src="{{ url_for('static', filename='js/main.js', v=static_v) }}"></script>
+</body>
+
+</html>

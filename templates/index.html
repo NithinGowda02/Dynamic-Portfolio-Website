@@ -1,0 +1,365 @@
+{# LEGACY TEMPLATE (not used by app.py routes). Safe to delete. #}
+<!--
+LEGACY TEMPLATE
+This file is not used by any current Flask route.
+The real home page template is: templates/home.html
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nithin.dev • Dashboard Portfolio</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+<header class="navbar">
+    <div class="navbar__brand">
+        <a href="{{ url_for('home') }}" class="brand__link">
+            <span class="brand__logo">N</span>
+            <span class="brand__name">Nithin.dev</span>
+        </a>
+    </div>
+
+    <nav class="navbar__nav" id="mainNav">
+        <ul class="nav__list">
+            <li class="nav__item"><a href="{{ url_for('home') }}" class="nav__link">Home</a></li>
+            <li class="nav__item"><a href="{{ url_for('about_page') }}" class="nav__link">About</a></li>
+            <li class="nav__item"><a href="{{ url_for('projects_page') }}" class="nav__link">Projects</a></li>
+            <li class="nav__item"><a href="{{ url_for('skills_page') }}" class="nav__link">Skills</a></li>
+            <li class="nav__item"><a href="{{ url_for('experience_page') }}" class="nav__link">Experience</a></li>
+            <li class="nav__item"><a href="{{ url_for('certifications_page') }}" class="nav__link">Certifications</a></li>
+            <li class="nav__item"><a href="{{ url_for('contact_page') }}" class="nav__link">Contact</a></li>
+        </ul>
+    </nav>
+
+    <div class="navbar__actions">
+        <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" download>Resume</a>
+        {% if session.get('admin_logged_in') %}
+        <a href="{{ url_for('admin') }}" class="btn btn--secondary">Admin</a>
+        {% else %}
+        <a href="{{ url_for('admin_login') }}" class="btn btn--secondary">Admin</a>
+        {% endif %}
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+            <span class="nav-toggle__bar"></span>
+            <span class="nav-toggle__bar"></span>
+            <span class="nav-toggle__bar"></span>
+        </button>
+    </div>
+</header>
+
+<main>
+    <section id="home" class="hero">
+        <div class="hero__card">
+            <div class="hero__content">
+                <div class="hero__header">
+                    <p class="hero__pretitle">Hello, I'm</p>
+                    <h1 class="hero__title">{{ profile[1] if profile else 'Nithin KP' }}</h1>
+                    <p class="hero__subtitle">{{ profile[2] if profile else 'Python Developer | Machine Learning Enthusiast' }}</p>
+                </div>
+
+                <p class="hero__copy">
+                    {{ profile[3] if profile else 'I build intelligent, scalable software systems and dashboards that solve real problems. I blend data, automation, and clean interfaces to bring ideas to life.' }}
+                </p>
+
+                <div class="hero__actions">
+                    <a href="{{ url_for('projects_page') }}" class="btn btn--secondary">View Projects</a>
+                    <a href="{{ url_for('contact_page') }}" class="btn btn--ghost">Contact Me</a>
+                </div>
+            </div>
+
+            <div class="hero__visual">
+                <div class="avatar">
+                    {% if profile and profile[8] %}
+                    <img src="{{ url_for('uploaded_profile', filename=profile[8]) }}" alt="{{ profile[1] if profile else 'Nithin KP' }}">
+                    {% else %}
+                    <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="{{ profile[1] if profile else 'Nithin KP' }}">
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="about" class="section section--glass">
+        <div class="module module--about">
+            <header class="module__header">
+                <h2 class="module__title">About Me</h2>
+                <p class="module__subtitle">Who I am and what I build</p>
+            </header>
+
+            <div class="module__body">
+                <p>
+                    I am a final-year Computer Science Engineering student passionate about Python development,
+                    Machine Learning, and full-stack web development. I enjoy building real-world applications,
+                    solving complex problems, and turning data into usable products.
+                </p>
+
+                <p>
+                    My goal is to become a skilled software developer who builds clean, scalable systems that deliver
+                    value and delight users. I thrive in environments where I can learn fast, experiment, and ship
+                    polished solutions.
+                </p>
+            </div>
+
+            <div class="module__actions">
+                <a href="{{ url_for('projects_page') }}" class="btn btn--secondary">See my work</a>
+                <a href="#contact" class="btn btn--ghost">Let’s connect</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="about" class="section section--glass">
+        <div class="module module--about module--span-2">
+            <header class="module__header">
+                <h2 class="module__title">About</h2>
+                <p class="module__subtitle">Get to know me</p>
+            </header>
+
+            <div class="module__body">
+                <p class="about__text">
+                    {{ profile[3] if profile else 'I build intelligent, scalable software systems and dashboards that solve real problems. I blend data, automation, and clean interfaces to bring ideas to life.' }}
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section id="projects" class="section section--glass">
+        <div class="module module--projects">
+            <header class="module__header">
+                <h2 class="module__title">Projects</h2>
+                <p class="module__subtitle">Building real systems with real impact</p>
+            </header>
+
+            <div class="project-slider" id="projectSlider">
+                <div class="project-slider__track">
+                    <div class="slide"><img src="{{ url_for('static', filename='images/slide1.svg') }}" alt="Project slide 1"></div>
+                    <div class="slide"><img src="{{ url_for('static', filename='images/slide2.svg') }}" alt="Project slide 2"></div>
+                    <div class="slide"><img src="{{ url_for('static', filename='images/slide3.svg') }}" alt="Project slide 3"></div>
+                    <div class="slide"><img src="{{ url_for('static', filename='images/slide4.svg') }}" alt="Project slide 4"></div>
+                    <div class="slide"><img src="{{ url_for('static', filename='images/slide5.svg') }}" alt="Project slide 5"></div>
+                    <div class="slide"><img src="{{ url_for('static', filename='images/slide6.svg') }}" alt="Project slide 6"></div>
+                </div>
+                <div class="project-slider__dots" id="sliderDots"></div>
+            </div>
+
+            <div class="projects__grid">
+                {% if projects %}
+                {% for project in projects %}
+                <article class="project-card">
+                    {% if project[5] %}
+                    <div class="project-card__image">
+                        <img src="{{ url_for('uploaded_project', filename=project[5]) }}" alt="{{ project[1] }}">
+                    </div>
+                    {% endif %}
+                    <h3 class="project-card__title">{{ project[1] }}</h3>
+                    <p class="project-card__copy">{{ project[2] }}</p>
+                    {% if project[3] %}
+                    <div class="project-card__tech-badges">
+                        {% for tech in project[3].split(',') %}
+                        <span class="tech-badge">{{ tech.strip() }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="project-card__links">
+                        {% if project[4] %}
+                        <a href="{{ project[4] }}" class="btn btn--secondary btn--small" target="_blank" rel="noreferrer noopener">
+                            View Code
+                        </a>
+                        {% endif %}
+                        {% if project[6] %}
+                        <a href="{{ project[6] }}" class="btn btn--primary btn--small" target="_blank" rel="noreferrer noopener">
+                            Live Demo
+                        </a>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state__text">No projects have been added yet. Add them to your database to display them here.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <section id="skills" class="section section--glass">
+        <div class="module module--skills">
+            <header class="module__header">
+                <h2 class="module__title">Skills & Technology Stack</h2>
+                <p class="module__subtitle">Tools & languages I use every day</p>
+            </header>
+
+            <div class="module__body">
+                <div class="skill-badges">
+                    {% if skills %}
+                    {% for skill in skills %}
+                    <span class="skill-badge">{{ skill[1] }}</span>
+                    {% endfor %}
+                    {% else %}
+                    <span class="skill-badge">Python</span>
+                    <span class="skill-badge">Flask</span>
+                    <span class="skill-badge">SQL</span>
+                    <span class="skill-badge">HTML</span>
+                    <span class="skill-badge">CSS</span>
+                    <span class="skill-badge">JavaScript</span>
+                    <span class="skill-badge">Machine Learning</span>
+                    <span class="skill-badge">Git</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="experience" class="section section--glass">
+        <div class="module module--experience">
+            <header class="module__header">
+                <h2 class="module__title">Experience</h2>
+                <p class="module__subtitle">Roles, projects and hands-on impact</p>
+            </header>
+
+            <div class="module__body">
+                <div class="experience__list">
+                    {% if experience %}
+                    {% for exp in experience %}
+                    <article class="experience-card">
+                        <div class="experience-card__header">
+                            <h3 class="experience-card__role">{{ exp[1] }}</h3>
+                            <span class="experience-card__company">{{ exp[2] }}</span>
+                        </div>
+                        <p class="experience-card__duration">{{ exp[3] }}</p>
+                        <p class="experience-card__desc">{{ exp[4] }}</p>
+                    </article>
+                    {% endfor %}
+                    {% else %}
+                    <article class="experience-card">
+                        <div class="experience-card__header">
+                            <h3 class="experience-card__role">Python Developer Intern</h3>
+                            <span class="experience-card__company">Labmentix</span>
+                        </div>
+                        <p class="experience-card__duration">Jan 2025 – Mar 2025</p>
+                        <p class="experience-card__desc">
+                            Built backend automation tools and APIs using Python. Gained hands-on experience in software
+                            architecture, database design, and deploying production-ready applications.
+                        </p>
+                        <a href="{{ url_for('uploaded_certificate', filename='internship_cert.pdf') }}" target="_blank"
+                            class="btn btn--secondary btn--small">View Certificate</a>
+                    </article>
+
+                    <article class="experience-card">
+                        <div class="experience-card__header">
+                            <h3 class="experience-card__role">Machine Learning Project</h3>
+                            <span class="experience-card__company">Fake News Detection System</span>
+                        </div>
+                        <p class="experience-card__duration">Sep 2024 – Dec 2024</p>
+                        <p class="experience-card__desc">
+                            Developed a classification model using natural language processing and Python to detect
+                            fake news. Implemented data pipelines, feature engineering, and model evaluation.
+                        </p>
+                        <a href="{{ url_for('uploaded_certificate', filename='ml_project_cert.pdf') }}" target="_blank"
+                            class="btn btn--secondary btn--small">View Certificate</a>
+                    </article>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="certifications" class="section section--glass">
+        <div class="module module--certifications module--span-2">
+            <header class="module__header">
+                <h2 class="module__title">Certifications</h2>
+                <p class="module__subtitle">Verified credentials & certificates</p>
+            </header>
+
+            <div class="certifications__grid">
+                {% if certifications %}
+                {% for cert in certifications %}
+                <article class="cert-card">
+                    <div class="cert-card__meta">
+                        <h3 class="cert-card__title">{{ cert[1] }}</h3>
+                        <span class="cert-card__platform">{{ cert[2] }}</span>
+                    </div>
+                    <p class="cert-card__year">{{ cert[3] }}</p>
+                    <a href="{{ url_for('uploaded_certificate', filename=cert[4]) }}" target="_blank"
+                        class="btn btn--secondary btn--small">
+                        View Certificate
+                    </a>
+                </article>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <p class="empty-state__text">No certifications added yet. Use the admin panel to upload certificates.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <section id="contact" class="section section--glass">
+        <div class="module module--contact module--span-2">
+            <header class="module__header">
+                <h2 class="module__title">Contact</h2>
+                <p class="module__subtitle">Send a message</p>
+            </header>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="alert-grid">
+                {% for category, message in messages %}
+                <div class="alert alert--{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            <form class="form" action="{{ url_for('contact_page') }}" method="post">
+                <label class="form__label">
+                    <span>Name</span>
+                    <input class="form__input" type="text" name="name" placeholder="Your name" required>
+                </label>
+
+                <label class="form__label">
+                    <span>Email</span>
+                    <input class="form__input" type="email" name="email" placeholder="you@example.com" required>
+                </label>
+
+                <label class="form__label">
+                    <span>Message</span>
+                    <textarea class="form__input" name="message" rows="5" placeholder="Hi Nithin, ..." required></textarea>
+                </label>
+
+                <button type="submit" class="btn btn--primary">Send Message</button>
+            </form>
+
+            {% if profile %}
+            <div class="contact__links">
+                {% if profile[4] %}
+                <a href="mailto:{{ profile[4] }}" class="btn btn--secondary">Email Me</a>
+                {% endif %}
+                {% if profile[5] %}
+                <a href="{{ profile[5] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">GitHub</a>
+                {% endif %}
+                {% if profile[6] %}
+                <a href="{{ profile[6] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">LinkedIn</a>
+                {% endif %}
+                {% if profile[7] %}
+                <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="btn btn--secondary" target="_blank">Download Resume</a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </section>
+</main>
+
+<footer class="footer">
+    <p class="footer__copy">© 2026 Nithin.dev — Built with Flask</p>
+</footer>
+
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+
+</html>

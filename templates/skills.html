@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="skills" class="section section--glass">
+    <div class="module module--skills">
+        <header class="module__header">
+            <h2 class="module__title">Skills & Technology Stack</h2>
+            <p class="module__subtitle">Tools & languages I use every day</p>
+        </header>
+
+        <div class="module__body">
+            <div class="skills-grid">
+                {% if skills %}
+                {% set items = skills %}
+                {% else %}
+                {% set items = ['Python','Flask','SQL','HTML','CSS','JavaScript','Machine Learning','Git'] %}
+                {% endif %}
+
+                {% for item in items %}
+                {% set skill_name = item[1] if skills else item %}
+                {% set lower = skill_name | lower %}
+                {% set icon = 'images/skills/default.svg' %}
+                {% if 'python' in lower %}
+                {% set icon = 'images/skills/python.svg' %}
+                {% elif 'flask' in lower %}
+                {% set icon = 'images/skills/flask.svg' %}
+                {% elif 'sql' in lower %}
+                {% set icon = 'images/skills/sql.svg' %}
+                {% elif 'html' in lower %}
+                {% set icon = 'images/skills/html.svg' %}
+                {% elif 'css' in lower %}
+                {% set icon = 'images/skills/css.svg' %}
+                {% elif 'javascript' in lower or 'js' == lower %}
+                {% set icon = 'images/skills/javascript.svg' %}
+                {% elif 'git' in lower %}
+                {% set icon = 'images/skills/git.svg' %}
+                {% elif 'machine learning' in lower or 'ml' == lower %}
+                {% set icon = 'images/skills/ml.svg' %}
+                {% endif %}
+
+                <article class="skill-card3d">
+                    <div class="skill-card3d__icon">
+                        <img src="{{ url_for('static', filename=icon) }}" alt="{{ skill_name }} logo" loading="lazy">
+                    </div>
+                    <div class="skill-card3d__name">{{ skill_name }}</div>
+                </article>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

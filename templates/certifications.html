@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section id="certifications" class="section section--glass">
+    <div class="module module--certifications module--span-2">
+        <header class="module__header">
+            <h2 class="module__title">Certifications</h2>
+            <p class="module__subtitle">Verified credentials & certificates</p>
+        </header>
+
+        <div class="certifications__grid">
+            {% if certifications %}
+            {% for cert in certifications %}
+            <article class="cert-card">
+                <div class="cert-card__meta">
+                    <h3 class="cert-card__title">{{ cert[1] }}</h3>
+                    <span class="cert-card__platform">{{ cert[2] }}</span>
+                </div>
+                <p class="cert-card__year">{{ cert[3] }}</p>
+                <a href="{{ url_for('uploaded_certificate', filename=cert[4]) }}" target="_blank"
+                    class="btn btn--secondary btn--small">
+                    View Certificate
+                </a>
+            </article>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <p class="empty-state__text">No certifications added yet. Use the admin panel to upload certificates.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
+

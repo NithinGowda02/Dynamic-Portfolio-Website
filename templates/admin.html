@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard &bull; Nithin.dev</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
+</head>
+<body>
+    <header class="navbar">
+        <div class="navbar__brand">
+            <a href="/" class="brand__link">
+                <span class="brand__logo">N</span>
+                <span class="brand__name">Nithin.dev</span>
+            </a>
+        </div>
+        <div class="navbar__actions">
+            <a href="{{ url_for('admin_logout') }}" class="btn btn--ghost">Logout</a>
+        </div>
+    </header>
+
+    <main>
+        <section class="dashboard-grid">
+            <article class="module module--span-2">
+                <header class="module__header">
+                    <h2 class="module__title">Admin Dashboard</h2>
+                    <p class="module__subtitle">Manage your portfolio content</p>
+                </header>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="alert-grid">
+                    {% for category, message in messages %}
+                    <div class="alert alert--{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+            </article>
+
+            <!-- Update Profile -->
+            <article class="module">
+                <header class="module__header">
+                    <h2 class="module__title">Update Profile</h2>
+                </header>
+                <form class="form" action="/admin/profile" method="post">
+                    <label class="form__label">
+                        <span>Name</span>
+                        <input class="form__input" type="text" name="name" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Title</span>
+                        <input class="form__input" type="text" name="title" required>
+                    </label>
+                    <label class="form__label">
+                        <span>About</span>
+                        <textarea class="form__input" name="about" rows="4" required></textarea>
+                    </label>
+                    <label class="form__label">
+                        <span>Email</span>
+                        <input class="form__input" type="email" name="email">
+                    </label>
+                    <label class="form__label">
+                        <span>GitHub</span>
+                        <input class="form__input" type="url" name="github">
+                    </label>
+                    <label class="form__label">
+                        <span>LinkedIn</span>
+                        <input class="form__input" type="url" name="linkedin">
+                    </label>
+                    <button type="submit" class="btn btn--primary">Update Profile</button>
+                </form>
+                <div class="form__actions">
+                    <a href="{{ url_for('update_profile') }}" class="btn btn--secondary">Advanced Profile Editor</a>
+                </div>
+            </article>
+
+            <!-- Add Project -->
+            <article class="module">
+                <header class="module__header">
+                    <h2 class="module__title">Add Project</h2>
+                </header>
+                <form class="form" action="/admin/projects" method="post" enctype="multipart/form-data">
+                    <label class="form__label">
+                        <span>Project Title</span>
+                        <input class="form__input" type="text" name="title" placeholder="Project Title" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Description</span>
+                        <textarea class="form__input" name="description" rows="3" required></textarea>
+                    </label>
+                    <label class="form__label">
+                        <span>Tech Stack</span>
+                        <input class="form__input" type="text" name="tech_stack" required>
+                    </label>
+                    <label class="form__label">
+                        <span>GitHub Link</span>
+                        <input class="form__input" type="url" name="github_link">
+                    </label>
+                    <label class="form__label">
+                        <span>Live Demo</span>
+                        <input class="form__input" type="url" name="live_demo">
+                    </label>
+                    <label class="form__label">
+                        <span>Project Image</span>
+                        <input class="form__input" type="file" name="project_images" accept="image/*" multiple>
+                        <small style="color: rgba(229, 231, 255, 0.65);">Upload up to 6 images. The first image becomes the cover.</small>
+                    </label>
+                    <div class="form__actions">
+                        <button type="submit" class="btn btn--primary">Add Project</button>
+                    </div>
+                </form>
+                <div class="form__actions">
+                    <a href="{{ url_for('admin_projects_manage') }}" class="btn btn--secondary btn--small">Manage Projects</a>
+                </div>
+            </article>
+
+            <!-- Upload Profile Image -->
+            <article class="module">
+                <header class="module__header">
+                    <h2 class="module__title">Upload Profile Image</h2>
+                </header>
+                <p>Upload your profile image. This will replace the current image.</p>
+                <div class="form__actions">
+                    <a href="{{ url_for('upload_profile_image') }}" class="btn btn--primary">Upload Image</a>
+                </div>
+            </article>
+
+            <!-- Add Project Thumbnails (Homepage Slider) -->
+            <article class="module">
+                <header class="module__header">
+                    <h2 class="module__title">Project Thumbnails</h2>
+                    <p class="module__subtitle">Adds images to the homepage sliding section</p>
+                </header>
+                <form class="form" action="{{ url_for('admin_project_thumbnails_add') }}" method="post" enctype="multipart/form-data">
+                    <label class="form__label">
+                        <span>Thumbnail Title</span>
+                        <input class="form__input" type="text" name="title" placeholder="e.g., Car Rental UI" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Thumbnail Image</span>
+                        <input class="form__input" type="file" name="thumbnail_image" accept="image/*" required>
+                        <small style="color: rgba(229, 231, 255, 0.65);">Only one image per thumbnail item.</small>
+                    </label>
+                    <label class="form__label">
+                        <span>Sort Order</span>
+                        <input class="form__input" type="number" name="sort_order" value="0">
+                    </label>
+                    <div class="form__actions">
+                        <button type="submit" class="btn btn--secondary">Add Thumbnail</button>
+                        <a href="{{ url_for('admin_project_thumbnails_manage') }}" class="btn btn--ghost btn--small">Manage</a>
+                    </div>
+                </form>
+            </article>
+
+            <!-- Add Skill -->
+            <article class="module">
+                <header class="module__header">
+                    <h2 class="module__title">Add Skill</h2>
+                </header>
+                <form class="form" action="/admin/skills" method="post">
+                    <label class="form__label">
+                        <span>Skill Name</span>
+                        <input class="form__input" type="text" name="skill_name" required>
+                    </label>
+                    <button type="submit" class="btn btn--primary">Add Skill</button>
+                </form>
+                <div class="form__actions">
+                    <a href="{{ url_for('admin_skills_manage') }}" class="btn btn--secondary btn--small">Manage Skills</a>
+                </div>
+            </article>
+
+            <!-- About Content -->
+            <article class="module module--span-2">
+                <header class="module__header">
+                    <h2 class="module__title">About Content</h2>
+                    <p class="module__subtitle">Homepage preview + detailed about text</p>
+                </header>
+                <form class="form" action="{{ url_for('admin_about') }}" method="post">
+                    <label class="form__label">
+                        <span>About Preview (2–3 lines)</span>
+                        <textarea class="form__input" name="preview_text" rows="3" placeholder="Short intro for the homepage...">{{
+                            about_content.preview_text if about_content else '' }}</textarea>
+                    </label>
+                    <label class="form__label">
+                        <span>About Details (full text)</span>
+                        <textarea class="form__input" name="details_text" rows="6" placeholder="Longer about text for the homepage details section and About page...">{{
+                            about_content.details_text if about_content else '' }}</textarea>
+                    </label>
+                    <button type="submit" class="btn btn--primary">Update About</button>
+                </form>
+            </article>
+
+            <!-- About Intro + Interests (Homepage Part 1) -->
+            <article class="module module--span-2">
+                <header class="module__header">
+                    <h2 class="module__title">About Intro (Homepage)</h2>
+                    <p class="module__subtitle">Minimal intro text + interest counters below the hero</p>
+                </header>
+
+                <div class="module__body">
+                    <h3 class="module__title">About Section Image</h3>
+                    <p class="module__subtitle">Used in the About section on Home and About pages.</p>
+
+                    <div class="form__actions" style="align-items: center; justify-content: space-between; gap: 12px;">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            {% if about_intro and about_intro.about_image %}
+                            <img src="{{ url_for('uploaded_about', filename=about_intro.about_image) }}" alt="About section image"
+                                style="width:72px; height:72px; object-fit:cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
+                            {% elif profile and profile[8] %}
+                            <img src="{{ url_for('uploaded_profile', filename=profile[8]) }}" alt="Profile image"
+                                style="width:72px; height:72px; object-fit:cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
+                            {% else %}
+                            <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="Profile image"
+                                style="width:72px; height:72px; object-fit:cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
+                            {% endif %}
+                            <div style="color: rgba(229, 231, 255, 0.75);">
+                                {% if about_intro and about_intro.about_image %}
+                                <div style="font-weight: 700; color: rgba(229, 231, 255, 0.95);">Custom About Image</div>
+                                <div style="font-size: 0.95rem;">{{ about_intro.about_image }}</div>
+                                {% else %}
+                                <div style="font-weight: 700; color: rgba(229, 231, 255, 0.95);">Using Profile Image</div>
+                                <div style="font-size: 0.95rem;">Upload a different one if you want.</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <form class="form" action="{{ url_for('admin_about_image') }}" method="post" enctype="multipart/form-data"
+                            style="display:flex; align-items:center; gap: 10px; margin: 0;">
+                            <input class="form__input" type="file" name="about_image" accept="image/*" required style="max-width: 260px;">
+                            <button type="submit" class="btn btn--secondary">Upload</button>
+                        </form>
+                    </div>
+                </div>
+
+                <form class="form" action="{{ url_for('admin_about_intro') }}" method="post">
+                    <label class="form__label">
+                        <span>Headline</span>
+                        <input class="form__input" type="text" name="headline" placeholder="My Name is Nithin K P" value="{{ about_intro.headline if about_intro else '' }}">
+                    </label>
+                    <label class="form__label">
+                        <span>Role Line</span>
+                        <input class="form__input" type="text" name="role_line" placeholder="Python Developer | Web Development" value="{{ about_intro.role_line if about_intro else '' }}">
+                    </label>
+                    <label class="form__label">
+                        <span>Short Description (max 2 lines)</span>
+                        <textarea class="form__input" name="short_desc" rows="2" placeholder="Minimal description...">{{ about_intro.short_desc if about_intro else '' }}</textarea>
+                    </label>
+                    <button type="submit" class="btn btn--primary">Update Intro</button>
+                </form>
+
+                <div class="module__body">
+                    <h3 class="module__title">Interest Counters</h3>
+                    <form class="form" action="{{ url_for('admin_interests_add') }}" method="post">
+                        <label class="form__label">
+                            <span>Label</span>
+                            <input class="form__input" type="text" name="label" placeholder="Python Projects" required>
+                        </label>
+                        <label class="form__label">
+                            <span>Count</span>
+                            <input class="form__input" type="number" name="count_value" value="0">
+                        </label>
+                        <label class="form__label">
+                            <span>Sort Order</span>
+                            <input class="form__input" type="number" name="sort_order" value="0">
+                        </label>
+                        <button type="submit" class="btn btn--secondary">Add Interest</button>
+                    </form>
+
+                    {% if about_interests %}
+                    <div class="highlight-admin-list">
+                        {% for it in about_interests %}
+                        <div class="form__actions">
+                            <span class="skill-badge">{{ it[1] }}</span>
+                            <span style="color: rgba(229, 231, 255, 0.7);">{{ it[2] }}</span>
+                            <form action="{{ url_for('delete_interest', interest_id=it[0]) }}" method="post">
+                                <button type="submit" class="btn btn--ghost btn--small"
+                                    onclick="return confirm('Delete this interest?');">Delete</button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="empty-state__text">No interests added yet.</p>
+                    {% endif %}
+                </div>
+            </article>
+
+            <!-- Professional Highlights -->
+            <article class="module module--span-2">
+                <header class="module__header">
+                    <h2 class="module__title">Professional Highlights</h2>
+                    <p class="module__subtitle">Three capability cards shown on the homepage</p>
+                </header>
+
+                <form class="form" action="{{ url_for('admin_highlights') }}" method="post">
+                    <label class="form__label">
+                        <span>Icon</span>
+                        <select class="form__input" name="icon_key">
+                            <option value="code">Code</option>
+                            <option value="brain">Brain</option>
+                            <option value="bolt">Bolt</option>
+                            <option value="server">Server</option>
+                            <option value="spark">Spark</option>
+                        </select>
+                    </label>
+                    <label class="form__label">
+                        <span>Title</span>
+                        <input class="form__input" type="text" name="title" placeholder="Python Development" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Description</span>
+                        <input class="form__input" type="text" name="description" placeholder="APIs, automation, clean backend architecture" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Sort Order</span>
+                        <input class="form__input" type="number" name="sort_order" value="0">
+                    </label>
+                    <button type="submit" class="btn btn--primary">Add Highlight</button>
+                </form>
+
+                <div class="module__body">
+                    {% if highlights %}
+                    <div class="highlight-admin-list">
+                        {% for h in highlights %}
+                        <div class="form__actions">
+                            <span class="skill-badge">{{ h[2] }}</span>
+                            <span style="color: rgba(229, 231, 255, 0.7);">{{ h[3] }}</span>
+                            <form action="{{ url_for('delete_highlight', highlight_id=h[0]) }}" method="post">
+                                <button type="submit" class="btn btn--ghost btn--small"
+                                    onclick="return confirm('Delete this highlight?');">Delete</button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="empty-state__text">No highlights added yet.</p>
+                    {% endif %}
+                </div>
+            </article>
+
+            <!-- Add Experience -->
+            <article class="module">
+                <header class="module__header">
+                    <h2 class="module__title">Add Experience</h2>
+                </header>
+                <form class="form" action="/admin/experience" method="post">
+                    <label class="form__label">
+                        <span>Role</span>
+                        <input class="form__input" type="text" name="role" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Organization</span>
+                        <input class="form__input" type="text" name="organization" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Duration</span>
+                        <input class="form__input" type="text" name="duration" placeholder="e.g., Jan 2025 – Mar 2025" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Description</span>
+                        <textarea class="form__input" name="description" rows="3" required></textarea>
+                    </label>
+                    <button type="submit" class="btn btn--primary">Add Experience</button>
+                </form>
+                <div class="form__actions">
+                    <a href="{{ url_for('admin_experience_manage') }}" class="btn btn--secondary btn--small">Manage Experience</a>
+                </div>
+            </article>
+
+            <!-- Add Certification -->
+            <article class="module">
+                <header class="module__header">
+                    <h2 class="module__title">Add Certification</h2>
+                </header>
+                <form class="form" action="/admin/certifications" method="post" enctype="multipart/form-data">
+                    <label class="form__label">
+                        <span>Title</span>
+                        <input class="form__input" type="text" name="title" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Platform</span>
+                        <input class="form__input" type="text" name="platform" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Year</span>
+                        <input class="form__input" type="text" name="year" required>
+                    </label>
+                    <label class="form__label">
+                        <span>Certificate PDF</span>
+                        <input class="form__input" type="file" name="certificate" accept="application/pdf" required>
+                    </label>
+                    <button type="submit" class="btn btn--primary">Add Certification</button>
+                </form>
+                <div class="form__actions">
+                    <a href="{{ url_for('admin_certifications') }}" class="btn btn--secondary btn--small">Manage Certifications</a>
+                </div>
+            </article>
+
+            <!-- Upload Resume -->
+            <article class="module">
+                <header class="module__header">
+                    <h2 class="module__title">Upload Resume</h2>
+                </header>
+                <p>Upload your resume PDF file.</p>
+                <div class="form__actions">
+                    <a href="{{ url_for('upload_resume') }}" class="btn btn--primary">Upload Resume</a>
+                </div>
+            </article>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p class="footer__copy">© 2026 Nithin.dev — Admin Dashboard</p>
+    </footer>
+</body>
+</html>

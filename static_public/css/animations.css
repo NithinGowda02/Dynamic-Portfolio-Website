@@ -1,0 +1,21 @@
+:root {
+  /* This file intentionally contains only keyframes / motion primitives. */
+}
+
+@keyframes orbFloat {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes skillIconFloat {
+  0% { transform: translateZ(18px) translateY(0); }
+  50% { transform: translateZ(18px) translateY(-4px); }
+  100% { transform: translateZ(18px) translateY(0); }
+}
+
+@keyframes footerFloat {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -16px, 0) scale(1.03); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
