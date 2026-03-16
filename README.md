@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Nithin.dev Portfolio (Flask + SQLite)
 
 This is a dynamic developer portfolio website built with Flask, SQLite, HTML, CSS, and JavaScript.
@@ -79,3 +80,6 @@ To delete instead of archiving:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\cleanup.ps1 -Purge
 ```
+=======
+# Dynamic-Portfolio-Website
+>>>>>>> a8e6a08eaf6f32566c9242be6e6b7cb6f8cae333
