@@ -3,11 +3,17 @@ import sqlite3
 from datetime import datetime
 
 from flask import Flask, flash, redirect, render_template, request, send_from_directory, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
+# When deployed behind a reverse proxy (e.g., Render), trust forwarded headers so redirects and
+# URL generation use the correct scheme/host. Keep this opt-in for safety.
+_trust_proxy = os.environ.get("TRUST_PROXY_HEADERS", "").strip().lower() in {"1", "true", "yes"}
+if _trust_proxy or os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 # Ensure mobile/production browsers pick up CSS/JS updates quickly.
 # Many hosts/CDNs can be aggressive about caching `/static/*` files.
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
@@ -39,8 +45,27 @@ def login_required(f):
     return decorated_function
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+def _resolve_storage_root():
+    """
+    Storage root for mutable data (SQLite DB + user uploads).
+
+    On Render and similar platforms, the filesystem is ephemeral across deploys unless you mount a
+    persistent disk. Point PORTFOLIO_STORAGE_DIR at that mount path (e.g., /var/data) so content
+    added from the admin dashboard survives redeploys.
+    """
+    root = os.environ.get("PORTFOLIO_STORAGE_DIR", "").strip()
+    if not root:
+        return BASE_DIR
+    if os.path.isabs(root):
+        return os.path.abspath(root)
+    return os.path.abspath(os.path.join(BASE_DIR, root))
+
+
+STORAGE_ROOT = _resolve_storage_root()
+
 # Prefer a clean, writable DB file. Keep it out of /static and /uploads.
-DATA_DIR = os.path.join(BASE_DIR, "data")
+DATA_DIR = os.path.join(STORAGE_ROOT, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PRIMARY_PATH = os.path.join(DATA_DIR, os.environ.get("PORTFOLIO_DB", "portfolio.db"))
 # Legacy location used by older versions of the app.
@@ -48,15 +73,16 @@ DB_LEGACY_PATH = os.path.join(BASE_DIR, "portfolio.db")
 # If the primary DB is left with a locked hot-journal (common on Windows when a process crashes or holds the file),
 # SQLite can start throwing "disk I/O error" on open. Keep a fallback copy that we can switch to automatically.
 DB_FALLBACK_PATH = os.path.join(DATA_DIR, "portfolio_live.db")
-UPLOAD_CERTIFICATES = os.path.join(BASE_DIR, "uploads", "certificates")
-UPLOAD_PROJECTS_NEW = os.path.join(BASE_DIR, "uploads", "projects")
+UPLOADS_ROOT = os.path.join(STORAGE_ROOT, "uploads")
+UPLOAD_CERTIFICATES = os.path.join(UPLOADS_ROOT, "certificates")
+UPLOAD_PROJECTS_NEW = os.path.join(UPLOADS_ROOT, "projects")
 # Legacy flat folder used by older versions of the app.
-UPLOAD_PROJECTS_LEGACY = os.path.join(BASE_DIR, "uploads", "project_images")
-UPLOAD_PROJECT_THUMBNAILS = os.path.join(BASE_DIR, "uploads", "project_thumbnails")
-UPLOAD_PROFILE = os.path.join(BASE_DIR, "uploads", "profile")
-UPLOAD_ABOUT = os.path.join(BASE_DIR, "uploads", "about")
-UPLOAD_RESUME = os.path.join(BASE_DIR, "uploads", "resume")
-UPLOAD_EXPERIENCE = os.path.join(BASE_DIR, "uploads", "experience")
+UPLOAD_PROJECTS_LEGACY = os.path.join(UPLOADS_ROOT, "project_images")
+UPLOAD_PROJECT_THUMBNAILS = os.path.join(UPLOADS_ROOT, "project_thumbnails")
+UPLOAD_PROFILE = os.path.join(UPLOADS_ROOT, "profile")
+UPLOAD_ABOUT = os.path.join(UPLOADS_ROOT, "about")
+UPLOAD_RESUME = os.path.join(UPLOADS_ROOT, "resume")
+UPLOAD_EXPERIENCE = os.path.join(UPLOADS_ROOT, "experience")
 
 ALLOWED_EXTENSIONS_PDF = {"pdf"}
 ALLOWED_EXTENSIONS_IMG = {"png", "jpg", "jpeg", "gif", "svg"}
@@ -1502,4 +1528,5 @@ def uploaded_experience(filename):
 
 if __name__ == "__main__":
     # Enable the reloader in development so templates/routes stay in sync.
-    app.run(debug=True, use_reloader=True)
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=True)
