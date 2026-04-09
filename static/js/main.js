@@ -1,16 +1,36 @@
+document.body.classList.add('nav-js');
+
 const navToggle = document.getElementById('navToggle');
+const mainNav = document.getElementById('mainNav');
 const navList = document.querySelector('.nav__list');
 
-if (navToggle && navList) {
+if (navToggle && mainNav && navList) {
+  const setNavOpen = (open) => {
+    navList.classList.toggle('open', open);
+    navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.body.classList.toggle('nav-open', open);
+  };
+
   navToggle.addEventListener('click', () => {
-    navList.classList.toggle('open');
+    setNavOpen(!navList.classList.contains('open'));
   });
 
   // Close mobile menu when clicking on a navigation link
   navList.addEventListener('click', (event) => {
-    if (event.target.classList.contains('nav__link')) {
-      navList.classList.remove('open');
-    }
+    if (event.target.closest('.nav__link')) setNavOpen(false);
+  });
+
+  // Close on outside click
+  document.addEventListener('click', (event) => {
+    if (!navList.classList.contains('open')) return;
+    if (navToggle.contains(event.target)) return;
+    if (mainNav.contains(event.target)) return;
+    setNavOpen(false);
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setNavOpen(false);
   });
 }
 
@@ -220,12 +240,19 @@ if (statsRoots.length) {
           io.unobserve(entry.target);
         }
       });
-    }, { threshold: 0.25 });
+    }, { threshold: 0.15, rootMargin: '80px 0px' });
 
     statsRoots.forEach((root) => io.observe(root));
   } else {
     statsRoots.forEach((root) => runCountup(root));
   }
+
+  // In case the section is already visible on load (or the observer doesn't fire reliably),
+  // eagerly run countup for any stats blocks currently in the viewport.
+  statsRoots.forEach((root) => {
+    const rect = root.getBoundingClientRect();
+    if (rect.top < window.innerHeight && rect.bottom > 0) runCountup(root);
+  });
 }
 
 // Smooth-scroll to hash targets after navigation (e.g. /#contact from other pages).

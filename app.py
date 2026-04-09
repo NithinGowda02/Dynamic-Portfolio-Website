@@ -27,6 +27,8 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_PRIMARY_PATH = os.path.join(DATA_DIR, os.environ.get("PORTFOLIO_DB", "portfolio.db"))
+# Legacy location used by older versions of the app.
+DB_LEGACY_PATH = os.path.join(BASE_DIR, "portfolio.db")
 # If the primary DB is left with a locked hot-journal (common on Windows when a process crashes or holds the file),
 # SQLite can start throwing "disk I/O error" on open. Keep a fallback copy that we can switch to automatically.
 DB_FALLBACK_PATH = os.path.join(DATA_DIR, "portfolio_live.db")
@@ -262,6 +264,67 @@ def init_db():
     cursor.execute(
         "INSERT OR IGNORE INTO about_intro (id, headline, role_line, short_desc, about_image) VALUES (1, '', '', '', '')"
     )
+
+    # If an older DB exists at the legacy path, migrate project-related tables into the new primary DB
+    # when the primary DB has no projects yet. This prevents "0 Projects" and empty Projects pages
+    # after upgrading the app's DB location.
+    try:
+        if os.path.exists(DB_LEGACY_PATH) and os.path.abspath(DB_LEGACY_PATH) != os.path.abspath(DB_PRIMARY_PATH):
+            cursor.execute("SELECT COUNT(*) FROM projects")
+            primary_projects = cursor.fetchone()[0]
+            if primary_projects == 0:
+                cursor.execute("ATTACH DATABASE ? AS legacy", (DB_LEGACY_PATH,))
+                try:
+                    cursor.execute("SELECT 1 FROM legacy.sqlite_master WHERE type='table' AND name='projects' LIMIT 1")
+                    if cursor.fetchone():
+                        cursor.execute("SELECT COUNT(*) FROM legacy.projects")
+                        legacy_projects = cursor.fetchone()[0]
+                        if legacy_projects > 0:
+                            for table in ("projects", "project_images", "project_thumbnails"):
+                                cursor.execute(
+                                    "SELECT 1 FROM legacy.sqlite_master WHERE type='table' AND name=? LIMIT 1",
+                                    (table,),
+                                )
+                                if not cursor.fetchone():
+                                    continue
+
+                                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                                if cursor.fetchone()[0] != 0:
+                                    continue
+
+                                cursor.execute(f"PRAGMA table_info({table})")
+                                main_cols = [r[1] for r in cursor.fetchall()]
+                                cursor.execute(f"PRAGMA legacy.table_info({table})")
+                                legacy_cols = {r[1] for r in cursor.fetchall()}
+                                cols = [c for c in main_cols if c in legacy_cols]
+                                if not cols:
+                                    continue
+
+                                col_list = ", ".join(cols)
+                                cursor.execute(
+                                    f"INSERT INTO {table} ({col_list}) SELECT {col_list} FROM legacy.{table}"
+                                )
+
+                                # Keep AUTOINCREMENT sequences consistent after inserting explicit ids.
+                                try:
+                                    cursor.execute(
+                                        "INSERT OR IGNORE INTO sqlite_sequence(name, seq) VALUES (?, 0)",
+                                        (table,),
+                                    )
+                                    cursor.execute(
+                                        f"UPDATE sqlite_sequence SET seq=(SELECT COALESCE(MAX(id),0) FROM {table}) WHERE name=?",
+                                        (table,),
+                                    )
+                                except sqlite3.OperationalError:
+                                    pass
+                finally:
+                    try:
+                        cursor.execute("DETACH DATABASE legacy")
+                    except sqlite3.OperationalError:
+                        pass
+    except sqlite3.OperationalError:
+        # Migration is best-effort; ignore if legacy DB is locked/unreadable.
+        pass
 
     conn.commit()
     conn.close()

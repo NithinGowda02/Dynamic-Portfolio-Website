@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ page_title if page_title else 'Nithin.dev - Portfolio' }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
@@ -28,6 +28,22 @@
             <li class="nav__item"><a href="{{ url_for('experience_page') }}" class="nav__link">Experience</a></li>
             <li class="nav__item"><a href="{{ url_for('certifications_page') }}" class="nav__link">Certifications</a></li>
             <li class="nav__item"><a href="{{ url_for('contact_page') }}" class="nav__link">Contact</a></li>
+
+            {% if profile and profile[7] %}
+            <li class="nav__item nav__item--mobile-only">
+                <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="nav__link" download>Resume</a>
+            </li>
+            {% else %}
+            <li class="nav__item nav__item--mobile-only">
+                <a href="{{ url_for('static', filename='resume.pdf') }}" class="nav__link" download>Resume</a>
+            </li>
+            {% endif %}
+
+            {% if session.get('admin_logged_in') %}
+            <li class="nav__item nav__item--mobile-only"><a href="{{ url_for('admin') }}" class="nav__link">Admin</a></li>
+            {% else %}
+            <li class="nav__item nav__item--mobile-only"><a href="{{ url_for('admin_login') }}" class="nav__link">Admin</a></li>
+            {% endif %}
         </ul>
     </nav>
 
@@ -42,7 +58,7 @@
         {% else %}
         <a href="{{ url_for('admin_login') }}" class="btn btn--secondary">Admin</a>
         {% endif %}
-        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-controls="mainNav" aria-expanded="false">
             <span class="nav-toggle__bar"></span>
             <span class="nav-toggle__bar"></span>
             <span class="nav-toggle__bar"></span>
