@@ -8,6 +8,22 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
+# Ensure mobile/production browsers pick up CSS/JS updates quickly.
+# Many hosts/CDNs can be aggressive about caching `/static/*` files.
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+@app.after_request
+def _add_static_cache_headers(response):
+    try:
+        path = request.path or ""
+    except Exception:
+        path = ""
+
+    if path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 # Admin credentials (in production, store securely)
 ADMIN_USERNAME = 'admin'
