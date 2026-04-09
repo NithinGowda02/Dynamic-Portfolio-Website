@@ -1,85 +1,43 @@
-<<<<<<< HEAD
-# Nithin.dev Portfolio (Flask + SQLite)
+# 🚀 Nithin.dev Portfolio (Flask + SQLite)
 
-This is a dynamic developer portfolio website built with Flask, SQLite, HTML, CSS, and JavaScript.
+A dynamic and fully customizable **developer portfolio website** built using **Flask, SQLite, HTML, CSS, and JavaScript**.  
+This application allows developers to showcase their **projects, skills, experience, and certifications** with a powerful **admin dashboard** for managing content easily.
 
-## Project Structure
+---
 
-```
-d:\Portfolio_website
-  app.py
-  requirements.txt
-  data\
-    portfolio.db
-    portfolio_live.db            # optional fallback copy (auto-used if primary DB gets stuck)
-  uploads\
-    about\
-    certificates\
-    profile\
-    projects\
-    project_images\              # legacy support
-    project_thumbnails\
-    resume\
-  templates\
-    base.html
-    home.html
-    about.html
-    projects.html
-    skills.html
-    experience.html
-    certifications.html
-    contact.html
-    admin*.html
-  static\
-    css\
-    js\
-    images\
-  scripts\
-    verify_project.py            # automated verification script
-```
+## 🌟 Features
 
-## Run Locally
+- 🧑‍💻 Personal profile with resume & social links  
+- 📂 Project showcase with multiple images & live demo links  
+- 🛠️ Skills management  
+- 💼 Experience section with file uploads  
+- 📜 Certifications with PDF uploads  
+- 🖼️ Image uploads (projects, profile, about section)  
+- 🔐 Secure admin panel with authentication  
+- 📊 Dynamic stats (projects, skills, certifications)  
+- 📬 Contact form  
+- ⚡ Cache-busting for static assets  
+- 🧠 SQLite fallback system for improved reliability  
 
-```powershell
-pip install -r requirements.txt
-python app.py
-```
+---
 
-Open `http://127.0.0.1:5000/`.
+## 🏗️ Tech Stack
 
-## Database
+**Frontend**
+- HTML5
+- CSS3
+- JavaScript
 
-The app uses `data/portfolio.db` by default.
+**Backend**
+- Python (Flask)
 
-If you want to point at a different DB file name inside `data/`, set:
+**Database**
+- SQLite
 
-```powershell
-$env:PORTFOLIO_DB="portfolio.db"
-```
+**Tools**
+- Werkzeug (security & file handling)
+- Jinja2 (templating)
 
-## Verification
+---
 
-Run an automated smoke test (routes + admin inserts + sliders render):
-
-```powershell
-python -B scripts\verify_project.py
-```
-
-Set `VERIFY_KEEP=1` to keep the inserted test data.
-
-## Cleanup (Optional)
-
-To archive old/unused files into `archive/<today>/cleanup_dump`:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\cleanup.ps1
-```
-
-To delete instead of archiving:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\cleanup.ps1 -Purge
-```
-=======
-# Dynamic-Portfolio-Website
->>>>>>> a8e6a08eaf6f32566c9242be6e6b7cb6f8cae333
+## 📁 Project Structure
