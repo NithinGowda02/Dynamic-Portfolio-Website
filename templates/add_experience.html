@@ -38,7 +38,7 @@
                 {% endif %}
                 {% endwith %}
 
-                <form class="form" action="/add_experience" method="post">
+                <form class="form" action="/add_experience" method="post" enctype="multipart/form-data">
                     <label class="form__label">
                         <span>Role</span>
                         <input class="form__input" type="text" name="role" placeholder="e.g., Python Developer Intern" required>
@@ -55,6 +55,10 @@
                         <span>Description</span>
                         <textarea class="form__input" name="description" rows="4" placeholder="Worked on Python backend projects" required></textarea>
                     </label>
+                    <label class="form__label">
+                        <span>Attachment (PDF)</span>
+                        <input class="form__input" type="file" name="experience_file" accept="application/pdf">
+                    </label>
                     <button type="submit" class="btn btn--primary">Add Experience</button>
                 </form>
 
@@ -69,6 +73,12 @@
                             </div>
                             <p class="experience-card__duration">{{ exp[3] }}</p>
                             <p class="experience-card__desc">{{ exp[4] }}</p>
+                            {% if exp|length > 5 and exp[5] %}
+                            <div class="form__actions">
+                                <a href="{{ url_for('uploaded_experience', filename=exp[5]) }}" target="_blank" rel="noopener"
+                                    class="btn btn--secondary btn--small">View Attachment</a>
+                            </div>
+                            {% endif %}
                         </article>
                         {% endfor %}
                     </div>

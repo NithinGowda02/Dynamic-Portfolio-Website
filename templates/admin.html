@@ -345,7 +345,7 @@
                 <header class="module__header">
                     <h2 class="module__title">Add Experience</h2>
                 </header>
-                <form class="form" action="/admin/experience" method="post">
+                <form class="form" action="/admin/experience" method="post" enctype="multipart/form-data">
                     <label class="form__label">
                         <span>Role</span>
                         <input class="form__input" type="text" name="role" required>
@@ -361,6 +361,10 @@
                     <label class="form__label">
                         <span>Description</span>
                         <textarea class="form__input" name="description" rows="3" required></textarea>
+                    </label>
+                    <label class="form__label">
+                        <span>Attachment (PDF)</span>
+                        <input class="form__input" type="file" name="experience_file" accept="application/pdf">
                     </label>
                     <button type="submit" class="btn btn--primary">Add Experience</button>
                 </form>

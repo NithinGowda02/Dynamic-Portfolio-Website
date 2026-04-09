@@ -52,6 +52,10 @@
                         <p class="experience-card__duration">{{ exp[3] }}</p>
                         <p class="experience-card__desc">{{ exp[4] }}</p>
                         <div class="form__actions">
+                            {% if exp|length > 5 and exp[5] %}
+                            <a href="{{ url_for('uploaded_experience', filename=exp[5]) }}" target="_blank" rel="noopener"
+                                class="btn btn--secondary btn--small">View Attachment</a>
+                            {% endif %}
                             <form action="{{ url_for('delete_experience', experience_id=exp[0]) }}" method="post">
                                 <button type="submit" class="btn btn--ghost btn--small"
                                     onclick="return confirm('Delete this experience entry?');">Delete</button>

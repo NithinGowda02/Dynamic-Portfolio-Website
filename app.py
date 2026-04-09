@@ -38,11 +38,21 @@ UPLOAD_PROJECT_THUMBNAILS = os.path.join(BASE_DIR, "uploads", "project_thumbnail
 UPLOAD_PROFILE = os.path.join(BASE_DIR, "uploads", "profile")
 UPLOAD_ABOUT = os.path.join(BASE_DIR, "uploads", "about")
 UPLOAD_RESUME = os.path.join(BASE_DIR, "uploads", "resume")
+UPLOAD_EXPERIENCE = os.path.join(BASE_DIR, "uploads", "experience")
 
 ALLOWED_EXTENSIONS_PDF = {"pdf"}
 ALLOWED_EXTENSIONS_IMG = {"png", "jpg", "jpeg", "gif", "svg"}
 
-for folder in [UPLOAD_CERTIFICATES, UPLOAD_PROJECTS_NEW, UPLOAD_PROJECTS_LEGACY, UPLOAD_PROJECT_THUMBNAILS, UPLOAD_PROFILE, UPLOAD_ABOUT, UPLOAD_RESUME]:
+for folder in [
+    UPLOAD_CERTIFICATES,
+    UPLOAD_PROJECTS_NEW,
+    UPLOAD_PROJECTS_LEGACY,
+    UPLOAD_PROJECT_THUMBNAILS,
+    UPLOAD_PROFILE,
+    UPLOAD_ABOUT,
+    UPLOAD_RESUME,
+    UPLOAD_EXPERIENCE,
+]:
     os.makedirs(folder, exist_ok=True)
 
 
@@ -169,7 +179,8 @@ def init_db():
     role TEXT,
     organization TEXT,
     duration TEXT,
-    description TEXT
+    description TEXT,
+    experience_file TEXT
     )
     """)
 
@@ -240,6 +251,11 @@ def init_db():
     # Backfill schema for older DBs.
     try:
         _ensure_column("about_intro", "about_image", "TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        _ensure_column("experience", "experience_file", "TEXT")
     except sqlite3.OperationalError:
         pass
 
@@ -923,16 +939,28 @@ def admin_experience():
     organization = request.form.get("organization", "").strip()
     duration = request.form.get("duration", "").strip()
     description = request.form.get("description", "").strip()
+    file = request.files.get("experience_file")
 
     if not role or not organization or not duration or not description:
         flash("All fields are required.", "error")
         return redirect(url_for("admin"))
 
+    experience_filename = ""
+    if file and file.filename:
+        if not allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
+            flash("Invalid file type. Please upload a PDF.", "error")
+            return redirect(url_for("admin"))
+
+        filename = secure_filename(file.filename)
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        experience_filename = f"{timestamp}_{filename}"
+        file.save(os.path.join(UPLOAD_EXPERIENCE, experience_filename))
+
     conn = db_connect()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO experience (role, organization, duration, description) VALUES (?, ?, ?, ?)",
-        (role, organization, duration, description),
+        "INSERT INTO experience (role, organization, duration, description, experience_file) VALUES (?, ?, ?, ?, ?)",
+        (role, organization, duration, description, experience_filename),
     )
     conn.commit()
     conn.close()
@@ -956,16 +984,28 @@ def add_experience():
         organization = request.form.get("organization", "").strip()
         duration = request.form.get("duration", "").strip()
         description = request.form.get("description", "").strip()
+        file = request.files.get("experience_file")
 
         if not role or not organization or not duration or not description:
             flash("All fields are required.", "error")
             return redirect(url_for("admin"))
 
+        experience_filename = ""
+        if file and file.filename:
+            if not allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
+                flash("Invalid file type. Please upload a PDF.", "error")
+                return redirect(url_for("admin"))
+
+            filename = secure_filename(file.filename)
+            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+            experience_filename = f"{timestamp}_{filename}"
+            file.save(os.path.join(UPLOAD_EXPERIENCE, experience_filename))
+
         conn = db_connect()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO experience (role, organization, duration, description) VALUES (?, ?, ?, ?)",
-            (role, organization, duration, description),
+            "INSERT INTO experience (role, organization, duration, description, experience_file) VALUES (?, ?, ?, ?, ?)",
+            (role, organization, duration, description, experience_filename),
         )
         conn.commit()
         conn.close()
@@ -1202,9 +1242,23 @@ def delete_skill(skill_id):
 def delete_experience(experience_id):
     conn = db_connect()
     cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT experience_file FROM experience WHERE id = ?", (experience_id,))
+        row = cursor.fetchone()
+        experience_file = row[0] if row else None
+    except sqlite3.OperationalError:
+        # Backward compatibility if the column doesn't exist for some reason.
+        experience_file = None
+
     cursor.execute("DELETE FROM experience WHERE id = ?", (experience_id,))
     conn.commit()
     conn.close()
+
+    if experience_file:
+        file_path = os.path.join(UPLOAD_EXPERIENCE, experience_file)
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
     flash("Experience deleted.", "success")
     return redirect(url_for("admin_experience_manage"))
@@ -1360,6 +1414,11 @@ def uploaded_project_thumbnail(filename):
 @app.route("/uploads/resume/<path:filename>")
 def uploaded_resume(filename):
     return send_from_directory(UPLOAD_RESUME, filename)
+
+
+@app.route("/uploads/experience/<path:filename>")
+def uploaded_experience(filename):
+    return send_from_directory(UPLOAD_EXPERIENCE, filename)
 
 
 if __name__ == "__main__":
