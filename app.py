@@ -7,6 +7,70 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+# ---------------------------------------------------------------------------
+# Cloudinary – optional cloud storage backend.
+# Set CLOUDINARY_URL  (e.g. cloudinary://api_key:api_secret@cloud_name)
+# OR set the three separate env vars below.
+# When these are absent the app falls back to local disk (same as before).
+# ---------------------------------------------------------------------------
+try:
+    import cloudinary
+    import cloudinary.uploader
+
+    _cld_cfg = cloudinary.config(
+        cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME"),
+        api_key=os.environ.get("CLOUDINARY_API_KEY"),
+        api_secret=os.environ.get("CLOUDINARY_API_SECRET"),
+        secure=True,
+    )
+    # cloudinary.config() also parses CLOUDINARY_URL automatically.
+    _CLOUDINARY_ENABLED = bool(
+        cloudinary.config().cloud_name
+        and cloudinary.config().api_key
+        and cloudinary.config().api_secret
+    )
+except ImportError:
+    _CLOUDINARY_ENABLED = False
+
+
+def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> str | None:
+    """Upload *file_obj* to Cloudinary and return the secure URL, or None on failure."""
+    if not _CLOUDINARY_ENABLED:
+        return None
+    try:
+        result = cloudinary.uploader.upload(
+            file_obj,
+            folder=folder,
+            resource_type=resource_type,
+            overwrite=True,
+        )
+        return result.get("secure_url")
+    except Exception as exc:
+        print(f"[WARN] Cloudinary upload failed: {exc}")
+        return None
+
+
+def _cloudinary_delete(url_or_path: str) -> None:
+    """Best-effort delete from Cloudinary given a stored URL or public_id."""
+    if not _CLOUDINARY_ENABLED or not url_or_path:
+        return
+    if not url_or_path.startswith("http"):
+        return  # local file – nothing to do in Cloudinary
+    try:
+        # Extract public_id: everything between /upload/ and the file extension.
+        import re
+        match = re.search(r"/upload/(?:v\d+/)?(.+?)(?:\.[^.]+)?$", url_or_path)
+        if match:
+            public_id = match.group(1)
+            cloudinary.uploader.destroy(public_id, resource_type="raw")
+            cloudinary.uploader.destroy(public_id, resource_type="image")
+    except Exception as exc:
+        print(f"[WARN] Cloudinary delete failed: {exc}")
+
+
+def _is_url(value: str) -> bool:
+    return bool(value and value.startswith("http"))
+
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
 # When deployed behind a reverse proxy (e.g., Render), trust forwarded headers so redirects and
@@ -721,13 +785,17 @@ def admin_certifications():
             filename = secure_filename(file.filename)
             timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
             filename = f"{timestamp}_{filename}"
-            file.save(os.path.join(UPLOAD_CERTIFICATES, filename))
+
+            cloud_url = _cloudinary_upload(file, "portfolio/certificates", resource_type="raw")
+            stored_value = cloud_url if cloud_url else filename
+            if not cloud_url:
+                file.save(os.path.join(UPLOAD_CERTIFICATES, filename))
 
             conn = db_connect()
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO certifications (title, platform, year, certificate_file) VALUES (?, ?, ?, ?)",
-                (title, platform, year, filename),
+                (title, platform, year, stored_value),
             )
             conn.commit()
             conn.close()
@@ -759,13 +827,17 @@ def add_certification():
             filename = secure_filename(file.filename)
             timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
             filename = f"{timestamp}_{filename}"
-            file.save(os.path.join(UPLOAD_CERTIFICATES, filename))
+
+            cloud_url = _cloudinary_upload(file, "portfolio/certificates", resource_type="raw")
+            stored_value = cloud_url if cloud_url else filename
+            if not cloud_url:
+                file.save(os.path.join(UPLOAD_CERTIFICATES, filename))
 
             conn = db_connect()
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO certifications (title, platform, year, certificate_file) VALUES (?, ?, ?, ?)",
-                (title, platform, year, filename),
+                (title, platform, year, stored_value),
             )
             conn.commit()
             conn.close()
@@ -833,8 +905,13 @@ def admin_projects():
             filename = secure_filename(f.filename)
             timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
             filename = f"{timestamp}_{filename}"
-            f.save(os.path.join(project_folder, filename))
-            saved.append(f"{project_folder_name}/{filename}")
+
+            cloud_url = _cloudinary_upload(f, f"portfolio/projects/{project_folder_name}")
+            if cloud_url:
+                saved.append(cloud_url)
+            else:
+                f.save(os.path.join(project_folder, filename))
+                saved.append(f"{project_folder_name}/{filename}")
 
         cover = saved[0]
         cursor.execute("UPDATE projects SET project_image = ? WHERE id = ?", (cover, project_id))
@@ -878,6 +955,10 @@ def delete_project(project_id):
     cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     conn.commit()
     conn.close()
+
+    # Delete from Cloudinary if URLs are stored
+    for rel in image_files:
+        _cloudinary_delete(rel)
 
     # Try to remove uploaded files/folders. Ignore failures (Windows locks etc).
     try:
@@ -934,13 +1015,17 @@ def admin_project_thumbnails_add():
     filename = secure_filename(file.filename)
     timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     filename = f"{timestamp}_{filename}"
-    file.save(os.path.join(UPLOAD_PROJECT_THUMBNAILS, filename))
+
+    cloud_url = _cloudinary_upload(file, "portfolio/project_thumbnails")
+    stored_value = cloud_url if cloud_url else filename
+    if not cloud_url:
+        file.save(os.path.join(UPLOAD_PROJECT_THUMBNAILS, filename))
 
     conn = db_connect()
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO project_thumbnails (title, image_file, sort_order) VALUES (?, ?, ?)",
-        (title, filename, sort_order_val),
+        (title, stored_value, sort_order_val),
     )
     conn.commit()
     conn.close()
@@ -969,6 +1054,7 @@ def delete_project_thumbnail(thumb_id):
     conn.close()
 
     if img:
+        _cloudinary_delete(img)
         try:
             p = os.path.join(UPLOAD_PROJECT_THUMBNAILS, img)
             if os.path.exists(p):
@@ -1058,8 +1144,14 @@ def admin_experience():
 
         filename = secure_filename(file.filename)
         timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        experience_filename = f"{timestamp}_{filename}"
-        file.save(os.path.join(UPLOAD_EXPERIENCE, experience_filename))
+        base_filename = f"{timestamp}_{filename}"
+
+        cloud_url = _cloudinary_upload(file, "portfolio/experience", resource_type="raw")
+        if cloud_url:
+            experience_filename = cloud_url
+        else:
+            file.save(os.path.join(UPLOAD_EXPERIENCE, base_filename))
+            experience_filename = base_filename
 
     conn = db_connect()
     cursor = conn.cursor()
@@ -1103,8 +1195,14 @@ def add_experience():
 
             filename = secure_filename(file.filename)
             timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            experience_filename = f"{timestamp}_{filename}"
-            file.save(os.path.join(UPLOAD_EXPERIENCE, experience_filename))
+            base_filename = f"{timestamp}_{filename}"
+
+            cloud_url = _cloudinary_upload(file, "portfolio/experience", resource_type="raw")
+            if cloud_url:
+                experience_filename = cloud_url
+            else:
+                file.save(os.path.join(UPLOAD_EXPERIENCE, base_filename))
+                experience_filename = base_filename
 
         conn = db_connect()
         cursor = conn.cursor()
@@ -1207,11 +1305,15 @@ def admin_about_image():
     filename = secure_filename(file.filename)
     timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     filename = f"{timestamp}_{filename}"
-    file.save(os.path.join(UPLOAD_ABOUT, filename))
+
+    cloud_url = _cloudinary_upload(file, "portfolio/about")
+    stored_value = cloud_url if cloud_url else filename
+    if not cloud_url:
+        file.save(os.path.join(UPLOAD_ABOUT, filename))
 
     conn = db_connect()
     cursor = conn.cursor()
-    cursor.execute("UPDATE about_intro SET about_image = ? WHERE id = 1", (filename,))
+    cursor.execute("UPDATE about_intro SET about_image = ? WHERE id = 1", (stored_value,))
     conn.commit()
 
     # Backfill: if an older project has a single cover image, ensure it exists in project_images too.
@@ -1361,6 +1463,7 @@ def delete_experience(experience_id):
     conn.close()
 
     if experience_file:
+        _cloudinary_delete(experience_file)
         file_path = os.path.join(UPLOAD_EXPERIENCE, experience_file)
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -1384,6 +1487,7 @@ def delete_certification(cert_id):
     conn.close()
 
     if certificate_file:
+        _cloudinary_delete(certificate_file)
         file_path = os.path.join(UPLOAD_CERTIFICATES, certificate_file)
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -1417,12 +1521,18 @@ def upload_resume():
             return redirect(url_for("admin"))
 
         filename = secure_filename(f"resume_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
-        file_path = os.path.join(UPLOAD_RESUME, filename)
-        file.save(file_path)
+
+        cloud_url = _cloudinary_upload(file, "portfolio/resume", resource_type="raw")
+        if cloud_url:
+            stored_value = cloud_url
+        else:
+            file_path = os.path.join(UPLOAD_RESUME, filename)
+            file.save(file_path)
+            stored_value = filename
 
         conn = db_connect()
         cursor = conn.cursor()
-        cursor.execute("UPDATE profile SET resume_file = ? WHERE id = 1", (filename,))
+        cursor.execute("UPDATE profile SET resume_file = ? WHERE id = 1", (stored_value,))
         conn.commit()
         conn.close()
 
@@ -1455,15 +1565,22 @@ def upload_profile_image():
         cursor.execute("SELECT profile_image FROM profile WHERE id = 1")
         old_image = cursor.fetchone()
         if old_image and old_image[0]:
+            _cloudinary_delete(old_image[0])
             old_path = os.path.join(UPLOAD_PROFILE, old_image[0])
             if os.path.exists(old_path):
                 os.remove(old_path)
 
         filename = secure_filename(f"profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{file.filename.rsplit('.', 1)[1].lower()}")
-        file_path = os.path.join(UPLOAD_PROFILE, filename)
-        file.save(file_path)
 
-        cursor.execute("UPDATE profile SET profile_image = ? WHERE id = 1", (filename,))
+        cloud_url = _cloudinary_upload(file, "portfolio/profile")
+        if cloud_url:
+            stored_value = cloud_url
+        else:
+            file_path = os.path.join(UPLOAD_PROFILE, filename)
+            file.save(file_path)
+            stored_value = filename
+
+        cursor.execute("UPDATE profile SET profile_image = ? WHERE id = 1", (stored_value,))
         conn.commit()
         conn.close()
 
@@ -1472,17 +1589,17 @@ def upload_profile_image():
 
     return render_template("upload_profile_image.html")
 
-
-
-
-
 @app.route("/uploads/certificates/<path:filename>")
 def uploaded_certificate(filename):
+    if _is_url(filename):
+        return redirect(filename)
     return send_from_directory(UPLOAD_CERTIFICATES, filename)
 
 
 @app.route("/uploads/projects/<path:filename>")
 def uploaded_project(filename):
+    if _is_url(filename):
+        return redirect(filename)
     new_path = os.path.join(UPLOAD_PROJECTS_NEW, filename)
     if os.path.exists(new_path):
         return send_from_directory(UPLOAD_PROJECTS_NEW, filename)
@@ -1503,26 +1620,36 @@ def uploaded_project_legacy(filename):
 
 @app.route("/uploads/profile/<path:filename>")
 def uploaded_profile(filename):
+    if _is_url(filename):
+        return redirect(filename)
     return send_from_directory(UPLOAD_PROFILE, filename)
 
 
 @app.route("/uploads/about/<path:filename>")
 def uploaded_about(filename):
+    if _is_url(filename):
+        return redirect(filename)
     return send_from_directory(UPLOAD_ABOUT, filename)
 
 
 @app.route("/uploads/project_thumbnails/<path:filename>")
 def uploaded_project_thumbnail(filename):
+    if _is_url(filename):
+        return redirect(filename)
     return send_from_directory(UPLOAD_PROJECT_THUMBNAILS, filename)
 
 
 @app.route("/uploads/resume/<path:filename>")
 def uploaded_resume(filename):
+    if _is_url(filename):
+        return redirect(filename)
     return send_from_directory(UPLOAD_RESUME, filename)
 
 
 @app.route("/uploads/experience/<path:filename>")
 def uploaded_experience(filename):
+    if _is_url(filename):
+        return redirect(filename)
     return send_from_directory(UPLOAD_EXPERIENCE, filename)
 
 
