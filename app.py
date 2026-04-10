@@ -231,6 +231,18 @@ def inject_static_version():
         v = 1
     return {"static_v": v}
 
+
+@app.context_processor
+def inject_file_url():
+    def file_url(value, route, **kwargs):
+        """Return a direct URL if value is already a cloud URL, else use url_for."""
+        if not value:
+            return ""
+        if value.startswith("http"):
+            return value
+        return url_for(route, filename=value, **kwargs)
+    return {"file_url": file_url}
+
 # CREATE DATABASE TABLE
 def init_db():
     conn = db_connect()
@@ -1588,6 +1600,10 @@ def upload_profile_image():
         return redirect(url_for("admin"))
 
     return render_template("upload_profile_image.html")
+
+
+
+
 
 @app.route("/uploads/certificates/<path:filename>")
 def uploaded_certificate(filename):
