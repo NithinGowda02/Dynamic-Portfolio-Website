@@ -10,7 +10,7 @@
 
         {# Slider removed on Projects page; thumbnails slider lives on the Home page only. #}
 
-        <div class="projects__grid projects__grid--details">
+        <div class="projects__grid projects__grid--details" data-projects-root>
             {% if projects %}
             {% for project in projects %}
             <article class="project-card project-card--details" id="project-{{ project.id }}">
@@ -70,4 +70,6 @@
         </div>
     </div>
 </section>
+
+<script src="{{ url_for('static', filename='js/projects_api.js', v=static_v) }}" defer></script>
 {% endblock %}

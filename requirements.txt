@@ -1,3 +1,6 @@
 Flask
 gunicorn
 cloudinary
+Flask-SQLAlchemy
+Flask-Migrate
+psycopg2-binary==2.9.9

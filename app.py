@@ -1,11 +1,15 @@
 ﻿import os
 import sqlite3
 from datetime import datetime
+from typing import Optional
 
-from flask import Flask, flash, redirect, render_template, request, send_from_directory, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+
+from db_config import get_database_uri
+from extensions import db, migrate
 
 # ---------------------------------------------------------------------------
 # Cloudinary – optional cloud storage backend.
@@ -17,13 +21,23 @@ try:
     import cloudinary
     import cloudinary.uploader
 
-    _cld_cfg = cloudinary.config(
-        cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME"),
-        api_key=os.environ.get("CLOUDINARY_API_KEY"),
-        api_secret=os.environ.get("CLOUDINARY_API_SECRET"),
-        secure=True,
-    )
-    # cloudinary.config() also parses CLOUDINARY_URL automatically.
+    # Let Cloudinary parse CLOUDINARY_URL automatically first.
+    cloudinary.config(secure=True)
+
+    # If discrete env vars are provided, they should override CLOUDINARY_URL.
+    _cld_overrides = {}
+    _cld_name = os.environ.get("CLOUDINARY_CLOUD_NAME")
+    _cld_key = os.environ.get("CLOUDINARY_API_KEY")
+    _cld_secret = os.environ.get("CLOUDINARY_API_SECRET")
+    if _cld_name:
+        _cld_overrides["cloud_name"] = _cld_name
+    if _cld_key:
+        _cld_overrides["api_key"] = _cld_key
+    if _cld_secret:
+        _cld_overrides["api_secret"] = _cld_secret
+    if _cld_overrides:
+        cloudinary.config(**_cld_overrides)
+
     _CLOUDINARY_ENABLED = bool(
         cloudinary.config().cloud_name
         and cloudinary.config().api_key
@@ -33,7 +47,7 @@ except ImportError:
     _CLOUDINARY_ENABLED = False
 
 
-def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> str | None:
+def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> Optional[str]:
     """Upload *file_obj* to Cloudinary and return the secure URL, or None on failure."""
     if not _CLOUDINARY_ENABLED:
         return None
@@ -72,7 +86,7 @@ def _is_url(value: str) -> bool:
     return bool(value and value.startswith("http"))
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
-app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
+app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET", "dev-secret")
 # When deployed behind a reverse proxy (e.g., Render), trust forwarded headers so redirects and
 # URL generation use the correct scheme/host. Keep this opt-in for safety.
 _trust_proxy = os.environ.get("TRUST_PROXY_HEADERS", "").strip().lower() in {"1", "true", "yes"}
@@ -162,6 +176,36 @@ for folder in [
     UPLOAD_EXPERIENCE,
 ]:
     os.makedirs(folder, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Database (production: PostgreSQL via DATABASE_URL; dev fallback: local SQLite)
+# ---------------------------------------------------------------------------
+app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri(sqlite_fallback_path=DB_PRIMARY_PATH)
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db.init_app(app)
+migrate.init_app(app, db)
+
+# Register ORM models for Flask-Migrate / SQLAlchemy.
+import models  # noqa: E402
+
+_USING_EXTERNAL_DB = bool(os.environ.get("DATABASE_URL", "").strip())
+_AUTO_DB_CREATE = os.environ.get("AUTO_DB_CREATE", "").strip().lower() in {"1", "true", "yes"}
+if not _USING_EXTERNAL_DB:
+    # Local development convenience: auto-create tables for the SQLite fallback.
+    _AUTO_DB_CREATE = True
+
+if _AUTO_DB_CREATE:
+    with app.app_context():
+        db.create_all()
+        # Ensure singleton rows exist (mirrors the old SQLite bootstrapping logic).
+        from models import AboutContent, AboutIntro  # noqa: E402
+
+        if db.session.get(AboutContent, 1) is None:
+            db.session.add(AboutContent(id=1, preview_text="", details_text=""))
+        if db.session.get(AboutIntro, 1) is None:
+            db.session.add(AboutIntro(id=1, headline="", role_line="", short_desc="", about_image=""))
+        db.session.commit()
 
 
 def db_connect():
@@ -447,163 +491,107 @@ def init_db():
     conn.commit()
     conn.close()
 
-try:
-    init_db()
-except sqlite3.OperationalError as exc:
-    # If the DB is temporarily unavailable (e.g., locked by another process),
-    # don't crash on import. Requests may still fail until the DB is writable.
-    print(f"[WARN] init_db() failed: {exc}")
+_LEGACY_SQLITE_BOOTSTRAP = os.environ.get("LEGACY_SQLITE_BOOTSTRAP", "").strip().lower() in {"1", "true", "yes"}
+if _LEGACY_SQLITE_BOOTSTRAP:
+    # One-time helper for older dev DBs. Prefer Flask-Migrate in all environments.
+    try:
+        init_db()
+    except sqlite3.OperationalError as exc:
+        print(f"[WARN] LEGACY_SQLITE_BOOTSTRAP init_db() failed: {exc}")
 
 
 # GET PROJECTS
 def get_projects():
-    conn = db_connect()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT id, title, description, tech_stack, github_link, project_image, live_demo FROM projects ORDER BY id DESC")
-    rows = cursor.fetchall()
-
-    cursor.execute("SELECT project_id, image_file FROM project_images ORDER BY sort_order ASC, id ASC")
-    img_rows = cursor.fetchall()
-
-    images_by_project = {}
-    for pid, image_file in img_rows:
-        images_by_project.setdefault(pid, []).append(image_file)
-
     projects = []
-    for (pid, title, description, tech_stack, github_link, project_image, live_demo) in rows:
-        images = images_by_project.get(pid, [])
-        cover_image = project_image or (images[0] if images else "")
+    for p in models.Project.query.order_by(models.Project.id.desc()).all():
+        images = [img.image_file or "" for img in (p.images or []) if img and img.image_file]
+        cover_image = (p.project_image or "").strip() or (images[0] if images else "")
         projects.append(
             {
-                "id": pid,
-                "title": title or "",
-                "description": description or "",
-                "tech_stack": tech_stack or "",
-                "github_link": github_link or "",
-                "live_demo": live_demo or "",
-                "cover_image": cover_image or "",
+                "id": p.id,
+                "title": (p.title or "").strip(),
+                "description": (p.description or "").strip(),
+                "tech_stack": (p.tech_stack or "").strip(),
+                "github_link": (p.github_link or "").strip(),
+                "live_demo": (p.live_demo or "").strip(),
+                "cover_image": cover_image,
                 "images": images,
             }
         )
-
-    conn.close()
-
     return projects
 
 
 # GET CERTIFICATIONS
 def get_certifications():
-    conn = db_connect()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM certifications ORDER BY year DESC, id DESC")
-
-    certs = cursor.fetchall()
-
-    conn.close()
-
-    return certs
+    rows = (
+        models.Certification.query.order_by(models.Certification.year.desc(), models.Certification.id.desc()).all()
+    )
+    return [(c.id, c.title, c.platform, c.year, c.certificate_file) for c in rows]
 
 
 # GET SKILLS
 def get_skills():
-    conn = db_connect()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM skills")
-
-    skills = cursor.fetchall()
-
-    conn.close()
-
-    return skills
+    rows = models.Skill.query.order_by(models.Skill.id.asc()).all()
+    return [(s.id, s.skill_name) for s in rows]
 
 
 # GET EXPERIENCE
 def get_experience():
-    conn = db_connect()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM experience")
-
-    experience = cursor.fetchall()
-
-    conn.close()
-
-    return experience
+    rows = models.Experience.query.order_by(models.Experience.id.asc()).all()
+    return [(e.id, e.role, e.organization, e.duration, e.description, e.experience_file) for e in rows]
 
 
 # GET PROFILE
 def get_profile():
-    conn = db_connect()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM profile LIMIT 1")
-
-    profile = cursor.fetchone()
-
-    conn.close()
-
-    return profile
+    row = models.Profile.query.order_by(models.Profile.id.asc()).first()
+    if not row:
+        return None
+    return (
+        row.id,
+        row.name,
+        row.title,
+        row.about,
+        row.email,
+        row.github,
+        row.linkedin,
+        row.resume_file,
+        row.profile_image,
+    )
 
 
 def get_about_content():
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT preview_text, details_text FROM about_content WHERE id = 1")
-    row = cursor.fetchone()
-    conn.close()
-
-    preview_text = row[0] if row and row[0] else ""
-    details_text = row[1] if row and row[1] else ""
+    row = db.session.get(models.AboutContent, 1)
+    preview_text = row.preview_text if row and row.preview_text else ""
+    details_text = row.details_text if row and row.details_text else ""
     return {"preview_text": preview_text, "details_text": details_text}
 
 
 def get_about_intro():
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT headline, role_line, short_desc, about_image FROM about_intro WHERE id = 1")
-    row = cursor.fetchone()
-    conn.close()
-
+    row = db.session.get(models.AboutIntro, 1)
     return {
-        "headline": row[0] if row and row[0] else "",
-        "role_line": row[1] if row and row[1] else "",
-        "short_desc": row[2] if row and row[2] else "",
-        "about_image": row[3] if row and row[3] else "",
+        "headline": row.headline if row and row.headline else "",
+        "role_line": row.role_line if row and row.role_line else "",
+        "short_desc": row.short_desc if row and row.short_desc else "",
+        "about_image": row.about_image if row and row.about_image else "",
     }
 
 
 def get_about_interests():
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, label, count_value FROM about_interests ORDER BY sort_order ASC, id ASC")
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
+    rows = (
+        models.AboutInterest.query.order_by(models.AboutInterest.sort_order.asc(), models.AboutInterest.id.asc()).all()
+    )
+    return [(r.id, r.label, r.count_value) for r in rows]
 
 
 def get_highlights():
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, icon_key, title, description FROM highlights ORDER BY sort_order ASC, id ASC")
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
+    rows = models.Highlight.query.order_by(models.Highlight.sort_order.asc(), models.Highlight.id.asc()).all()
+    return [(r.id, r.icon_key, r.title, r.description) for r in rows]
 
 
 def get_stats_counts():
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM projects")
-    projects_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM skills")
-    skills_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM certifications")
-    certifications_count = cursor.fetchone()[0]
-    conn.close()
-
+    projects_count = models.Project.query.count()
+    skills_count = models.Skill.query.count()
+    certifications_count = models.Certification.query.count()
     return {
         "projects": projects_count,
         "skills": skills_count,
@@ -612,12 +600,12 @@ def get_stats_counts():
 
 
 def get_project_thumbnails():
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, title, image_file FROM project_thumbnails ORDER BY sort_order ASC, id ASC")
-    rows = cursor.fetchall()
-    conn.close()
-    return [{"id": r[0], "title": r[1] or "", "image_file": r[2] or ""} for r in rows]
+    rows = (
+        models.ProjectThumbnail.query.order_by(
+            models.ProjectThumbnail.sort_order.asc(), models.ProjectThumbnail.id.asc()
+        ).all()
+    )
+    return [{"id": r.id, "title": (r.title or ""), "image_file": (r.image_file or "")} for r in rows]
 
 
 @app.route("/")
@@ -675,6 +663,112 @@ def projects_page():
     profile = get_profile()
     about_content = get_about_content()
     return render_template("projects.html", projects=projects, profile=profile, about_content=about_content)
+
+
+def _api_file_url(value: str, endpoint: str) -> str:
+    if not value:
+        return ""
+    if value.startswith("http"):
+        return value
+    return url_for(endpoint, filename=value)
+
+
+@app.route("/api/projects", methods=["GET"])
+def api_projects_list():
+    projects = get_projects()
+    for p in projects:
+        p["cover_image_url"] = _api_file_url(p.get("cover_image", ""), "uploaded_project")
+        p["image_urls"] = [_api_file_url(img, "uploaded_project") for img in (p.get("images") or [])]
+    return jsonify(projects)
+
+
+@app.route("/api/projects", methods=["POST"])
+@login_required
+def api_projects_create():
+    payload = request.get_json(silent=True) or {}
+    title = (payload.get("title") or "").strip()
+    description = (payload.get("description") or "").strip()
+    tech_stack = (payload.get("tech_stack") or "").strip()
+    github_link = (payload.get("github_link") or "").strip()
+    live_demo = (payload.get("live_demo") or "").strip()
+    cover_image = (payload.get("cover_image") or "").strip() or None
+
+    if not title or not description:
+        return jsonify({"error": "title and description are required"}), 400
+
+    project = models.Project(
+        title=title,
+        description=description,
+        tech_stack=tech_stack,
+        github_link=github_link,
+        project_image=cover_image,
+        live_demo=live_demo,
+    )
+    db.session.add(project)
+    db.session.flush()
+
+    images = payload.get("images") or []
+    if isinstance(images, list):
+        for idx, img in enumerate(images[:6]):
+            img_val = (img or "").strip()
+            if img_val:
+                db.session.add(models.ProjectImage(project_id=project.id, image_file=img_val, sort_order=idx))
+
+    db.session.commit()
+    return jsonify({"id": project.id}), 201
+
+
+@app.route("/api/projects/<int:project_id>", methods=["PUT"])
+@login_required
+def api_projects_update(project_id: int):
+    project = db.session.get(models.Project, project_id)
+    if not project:
+        return jsonify({"error": "not found"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    for field, attr in [
+        ("title", "title"),
+        ("description", "description"),
+        ("tech_stack", "tech_stack"),
+        ("github_link", "github_link"),
+        ("live_demo", "live_demo"),
+        ("cover_image", "project_image"),
+    ]:
+        if field in payload:
+            value = payload.get(field)
+            setattr(project, attr, (value or "").strip() or None)
+
+    if "images" in payload and isinstance(payload.get("images"), list):
+        # Replace image list (max 6).
+        project.images = []
+        for idx, img in enumerate((payload.get("images") or [])[:6]):
+            img_val = (img or "").strip()
+            if img_val:
+                project.images.append(models.ProjectImage(image_file=img_val, sort_order=idx))
+
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/projects/<int:project_id>", methods=["DELETE"])
+@login_required
+def api_projects_delete(project_id: int):
+    project = db.session.get(models.Project, project_id)
+    if not project:
+        return jsonify({"error": "not found"}), 404
+
+    image_files = [img.image_file for img in (project.images or []) if img and img.image_file]
+    cover = (project.project_image or "").strip()
+    if cover and cover not in image_files:
+        image_files.append(cover)
+
+    db.session.delete(project)
+    db.session.commit()
+
+    for rel in image_files:
+        _cloudinary_delete(rel)
+
+    return jsonify({"ok": True})
 
 
 @app.route("/skills")
@@ -803,14 +897,15 @@ def admin_certifications():
             if not cloud_url:
                 file.save(os.path.join(UPLOAD_CERTIFICATES, filename))
 
-            conn = db_connect()
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO certifications (title, platform, year, certificate_file) VALUES (?, ?, ?, ?)",
-                (title, platform, year, stored_value),
+            db.session.add(
+                models.Certification(
+                    title=title,
+                    platform=platform,
+                    year=year,
+                    certificate_file=stored_value,
+                )
             )
-            conn.commit()
-            conn.close()
+            db.session.commit()
 
             flash("Certification added successfully!", "success")
             return redirect(url_for("admin_certifications"))
@@ -845,14 +940,15 @@ def add_certification():
             if not cloud_url:
                 file.save(os.path.join(UPLOAD_CERTIFICATES, filename))
 
-            conn = db_connect()
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO certifications (title, platform, year, certificate_file) VALUES (?, ?, ?, ?)",
-                (title, platform, year, stored_value),
+            db.session.add(
+                models.Certification(
+                    title=title,
+                    platform=platform,
+                    year=year,
+                    certificate_file=stored_value,
+                )
             )
-            conn.commit()
-            conn.close()
+            db.session.commit()
 
             flash("Certification added successfully!", "success")
             return redirect(url_for("admin"))
@@ -883,9 +979,6 @@ def admin_projects():
         flash("Title and description are required.", "error")
         return redirect(url_for("admin"))
 
-    conn = db_connect()
-    cursor = conn.cursor()
-
     # Validate and cap uploads (max 6 images per project).
     valid_files = []
     for f in files:
@@ -896,16 +989,21 @@ def admin_projects():
         valid_files.append(f)
 
     if len(valid_files) > 6:
-        conn.close()
         flash("You can upload a maximum of 6 images per project.", "error")
         return redirect(url_for("admin"))
 
     # Insert project first to get an ID for folder structure.
-    cursor.execute(
-        "INSERT INTO projects (title, description, tech_stack, github_link, project_image, live_demo) VALUES (?, ?, ?, ?, ?, ?)",
-        (title, description, tech_stack, github_link, None, live_demo),
+    project = models.Project(
+        title=title,
+        description=description,
+        tech_stack=tech_stack,
+        github_link=github_link,
+        project_image=None,
+        live_demo=live_demo,
     )
-    project_id = cursor.lastrowid
+    db.session.add(project)
+    db.session.flush()
+    project_id = project.id
 
     if valid_files:
         project_folder_name = f"project_{project_id}"
@@ -926,15 +1024,12 @@ def admin_projects():
                 saved.append(f"{project_folder_name}/{filename}")
 
         cover = saved[0]
-        cursor.execute("UPDATE projects SET project_image = ? WHERE id = ?", (cover, project_id))
+        project.project_image = cover
 
         for idx, rel_path in enumerate(saved):
-            cursor.execute(
-                "INSERT INTO project_images (project_id, image_file, sort_order) VALUES (?, ?, ?)",
-                (project_id, rel_path, idx),
-            )
-    conn.commit()
-    conn.close()
+            db.session.add(models.ProjectImage(project_id=project_id, image_file=rel_path, sort_order=idx))
+
+    db.session.commit()
 
     flash("Project added successfully!", "success")
     return redirect(url_for("admin"))
@@ -950,23 +1045,18 @@ def admin_projects_manage():
 @app.route("/admin/projects/<int:project_id>/delete", methods=["POST"])
 @login_required
 def delete_project(project_id):
-    conn = db_connect()
-    cursor = conn.cursor()
+    project = db.session.get(models.Project, project_id)
+    if not project:
+        flash("Project not found.", "error")
+        return redirect(url_for("admin_projects_manage"))
 
-    cursor.execute("SELECT image_file FROM project_images WHERE project_id = ?", (project_id,))
-    image_rows = cursor.fetchall()
-    image_files = [r[0] for r in image_rows if r and r[0]]
-
-    cursor.execute("SELECT project_image FROM projects WHERE id = ?", (project_id,))
-    row = cursor.fetchone()
-    cover = row[0] if row and row[0] else ""
+    image_files = [img.image_file for img in (project.images or []) if img and img.image_file]
+    cover = project.project_image or ""
     if cover and cover not in image_files:
         image_files.append(cover)
 
-    cursor.execute("DELETE FROM project_images WHERE project_id = ?", (project_id,))
-    cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
-    conn.commit()
-    conn.close()
+    db.session.delete(project)
+    db.session.commit()
 
     # Delete from Cloudinary if URLs are stored
     for rel in image_files:
@@ -1033,14 +1123,14 @@ def admin_project_thumbnails_add():
     if not cloud_url:
         file.save(os.path.join(UPLOAD_PROJECT_THUMBNAILS, filename))
 
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO project_thumbnails (title, image_file, sort_order) VALUES (?, ?, ?)",
-        (title, stored_value, sort_order_val),
+    db.session.add(
+        models.ProjectThumbnail(
+            title=title,
+            image_file=stored_value,
+            sort_order=sort_order_val,
+        )
     )
-    conn.commit()
-    conn.close()
+    db.session.commit()
 
     flash("Project thumbnail added.", "success")
     return redirect(url_for("admin"))
@@ -1056,14 +1146,11 @@ def admin_project_thumbnails_manage():
 @app.route("/admin/project_thumbnails/<int:thumb_id>/delete", methods=["POST"])
 @login_required
 def delete_project_thumbnail(thumb_id):
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT image_file FROM project_thumbnails WHERE id = ?", (thumb_id,))
-    row = cursor.fetchone()
-    img = row[0] if row and row[0] else ""
-    cursor.execute("DELETE FROM project_thumbnails WHERE id = ?", (thumb_id,))
-    conn.commit()
-    conn.close()
+    thumb = db.session.get(models.ProjectThumbnail, thumb_id)
+    img = (thumb.image_file if thumb else "") or ""
+    if thumb:
+        db.session.delete(thumb)
+        db.session.commit()
 
     if img:
         _cloudinary_delete(img)
@@ -1091,11 +1178,8 @@ def admin_skills():
         flash("Skill name is required.", "error")
         return redirect(url_for("admin"))
 
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO skills (skill_name) VALUES (?)", (skill_name,))
-    conn.commit()
-    conn.close()
+    db.session.add(models.Skill(skill_name=skill_name))
+    db.session.commit()
 
     flash("Skill added successfully!", "success")
     return redirect(url_for("admin"))
@@ -1118,11 +1202,8 @@ def add_skill():
             flash("Skill name is required.", "error")
             return redirect(url_for("admin"))
 
-        conn = db_connect()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO skills (skill_name) VALUES (?)", (skill_name,))
-        conn.commit()
-        conn.close()
+        db.session.add(models.Skill(skill_name=skill_name))
+        db.session.commit()
 
         flash("Skill added successfully!", "success")
         return redirect(url_for("admin"))
@@ -1165,14 +1246,16 @@ def admin_experience():
             file.save(os.path.join(UPLOAD_EXPERIENCE, base_filename))
             experience_filename = base_filename
 
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO experience (role, organization, duration, description, experience_file) VALUES (?, ?, ?, ?, ?)",
-        (role, organization, duration, description, experience_filename),
+    db.session.add(
+        models.Experience(
+            role=role,
+            organization=organization,
+            duration=duration,
+            description=description,
+            experience_file=experience_filename,
+        )
     )
-    conn.commit()
-    conn.close()
+    db.session.commit()
 
     flash("Experience added successfully!", "success")
     return redirect(url_for("admin"))
@@ -1216,14 +1299,16 @@ def add_experience():
                 file.save(os.path.join(UPLOAD_EXPERIENCE, base_filename))
                 experience_filename = base_filename
 
-        conn = db_connect()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO experience (role, organization, duration, description, experience_file) VALUES (?, ?, ?, ?, ?)",
-            (role, organization, duration, description, experience_filename),
+        db.session.add(
+            models.Experience(
+                role=role,
+                organization=organization,
+                duration=duration,
+                description=description,
+                experience_file=experience_filename,
+            )
         )
-        conn.commit()
-        conn.close()
+        db.session.commit()
 
         flash("Experience added successfully!", "success")
         return redirect(url_for("admin"))
@@ -1250,14 +1335,18 @@ def admin_profile():
         flash("Name, title, and about are required.", "error")
         return redirect(url_for("admin"))
 
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT OR REPLACE INTO profile (id, name, title, about, email, github, linkedin, resume_file, profile_image) VALUES (1, ?, ?, ?, ?, ?, ?, (SELECT resume_file FROM profile WHERE id=1), (SELECT profile_image FROM profile WHERE id=1))",
-        (name, title, about, email, github, linkedin),
-    )
-    conn.commit()
-    conn.close()
+    profile = db.session.get(models.Profile, 1)
+    if profile is None:
+        profile = models.Profile(id=1)
+        db.session.add(profile)
+
+    profile.name = name
+    profile.title = title
+    profile.about = about
+    profile.email = email
+    profile.github = github
+    profile.linkedin = linkedin
+    db.session.commit()
 
     flash("Profile updated successfully!", "success")
     return redirect(url_for("admin"))
@@ -1269,14 +1358,13 @@ def admin_about():
     preview_text = request.form.get("preview_text", "").strip()
     details_text = request.form.get("details_text", "").strip()
 
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE about_content SET preview_text = ?, details_text = ? WHERE id = 1",
-        (preview_text, details_text),
-    )
-    conn.commit()
-    conn.close()
+    row = db.session.get(models.AboutContent, 1)
+    if row is None:
+        row = models.AboutContent(id=1, preview_text="", details_text="")
+        db.session.add(row)
+    row.preview_text = preview_text
+    row.details_text = details_text
+    db.session.commit()
 
     flash("About content updated.", "success")
     return redirect(url_for("admin"))
@@ -1289,14 +1377,14 @@ def admin_about_intro():
     role_line = request.form.get("role_line", "").strip()
     short_desc = request.form.get("short_desc", "").strip()
 
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE about_intro SET headline = ?, role_line = ?, short_desc = ? WHERE id = 1",
-        (headline, role_line, short_desc),
-    )
-    conn.commit()
-    conn.close()
+    row = db.session.get(models.AboutIntro, 1)
+    if row is None:
+        row = models.AboutIntro(id=1, headline="", role_line="", short_desc="", about_image="")
+        db.session.add(row)
+    row.headline = headline
+    row.role_line = role_line
+    row.short_desc = short_desc
+    db.session.commit()
 
     flash("About intro updated.", "success")
     return redirect(url_for("admin"))
@@ -1323,31 +1411,22 @@ def admin_about_image():
     if not cloud_url:
         file.save(os.path.join(UPLOAD_ABOUT, filename))
 
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE about_intro SET about_image = ? WHERE id = 1", (stored_value,))
-    conn.commit()
+    row = db.session.get(models.AboutIntro, 1)
+    if row is None:
+        row = models.AboutIntro(id=1, headline="", role_line="", short_desc="", about_image="")
+        db.session.add(row)
+    row.about_image = stored_value
 
     # Backfill: if an older project has a single cover image, ensure it exists in project_images too.
-    try:
-        cursor.execute("SELECT id, project_image FROM projects WHERE project_image IS NOT NULL AND project_image != ''")
-        rows = cursor.fetchall()
-        for pid, cover in rows:
-            cursor.execute(
-                "SELECT 1 FROM project_images WHERE project_id = ? AND image_file = ?",
-                (pid, cover),
-            )
-            if cursor.fetchone() is None:
-                cursor.execute(
-                    "INSERT INTO project_images (project_id, image_file, sort_order) VALUES (?, ?, 0)",
-                    (pid, cover),
-                )
-        conn.commit()
-    except sqlite3.OperationalError:
-        # If the DB is in a transitional state, don't block startup.
-        pass
+    for p in models.Project.query.filter(models.Project.project_image.isnot(None)).all():
+        cover = (p.project_image or "").strip()
+        if not cover:
+            continue
+        exists = any((img.image_file or "") == cover for img in (p.images or []))
+        if not exists:
+            db.session.add(models.ProjectImage(project_id=p.id, image_file=cover, sort_order=0))
 
-    conn.close()
+    db.session.commit()
 
     flash("About section image updated.", "success")
     return redirect(url_for("admin"))
@@ -1374,14 +1453,10 @@ def admin_interests_add():
     except ValueError:
         sort_order_int = 0
 
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO about_interests (label, count_value, sort_order) VALUES (?, ?, ?)",
-        (label, count_value_int, sort_order_int),
+    db.session.add(
+        models.AboutInterest(label=label, count_value=count_value_int, sort_order=sort_order_int)
     )
-    conn.commit()
-    conn.close()
+    db.session.commit()
 
     flash("Interest added.", "success")
     return redirect(url_for("admin"))
@@ -1390,11 +1465,10 @@ def admin_interests_add():
 @app.route("/admin/interests/<int:interest_id>/delete", methods=["POST"])
 @login_required
 def delete_interest(interest_id):
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM about_interests WHERE id = ?", (interest_id,))
-    conn.commit()
-    conn.close()
+    row = db.session.get(models.AboutInterest, interest_id)
+    if row:
+        db.session.delete(row)
+        db.session.commit()
 
     flash("Interest deleted.", "success")
     return redirect(url_for("admin"))
@@ -1417,14 +1491,15 @@ def admin_highlights():
     except ValueError:
         sort_order_int = 0
 
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO highlights (icon_key, title, description, sort_order) VALUES (?, ?, ?, ?)",
-        (icon_key, title, description, sort_order_int),
+    db.session.add(
+        models.Highlight(
+            icon_key=icon_key,
+            title=title,
+            description=description,
+            sort_order=sort_order_int,
+        )
     )
-    conn.commit()
-    conn.close()
+    db.session.commit()
 
     flash("Highlight added.", "success")
     return redirect(url_for("admin"))
@@ -1433,11 +1508,10 @@ def admin_highlights():
 @app.route("/admin/highlights/<int:highlight_id>/delete", methods=["POST"])
 @login_required
 def delete_highlight(highlight_id):
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM highlights WHERE id = ?", (highlight_id,))
-    conn.commit()
-    conn.close()
+    row = db.session.get(models.Highlight, highlight_id)
+    if row:
+        db.session.delete(row)
+        db.session.commit()
 
     flash("Highlight deleted.", "success")
     return redirect(url_for("admin"))
@@ -1446,11 +1520,10 @@ def delete_highlight(highlight_id):
 @app.route("/admin/skills/<int:skill_id>/delete", methods=["POST"])
 @login_required
 def delete_skill(skill_id):
-    conn = db_connect()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM skills WHERE id = ?", (skill_id,))
-    conn.commit()
-    conn.close()
+    row = db.session.get(models.Skill, skill_id)
+    if row:
+        db.session.delete(row)
+        db.session.commit()
 
     flash("Skill deleted.", "success")
     return redirect(url_for("admin_skills_manage"))
@@ -1459,20 +1532,11 @@ def delete_skill(skill_id):
 @app.route("/admin/experience/<int:experience_id>/delete", methods=["POST"])
 @login_required
 def delete_experience(experience_id):
-    conn = db_connect()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("SELECT experience_file FROM experience WHERE id = ?", (experience_id,))
-        row = cursor.fetchone()
-        experience_file = row[0] if row else None
-    except sqlite3.OperationalError:
-        # Backward compatibility if the column doesn't exist for some reason.
-        experience_file = None
-
-    cursor.execute("DELETE FROM experience WHERE id = ?", (experience_id,))
-    conn.commit()
-    conn.close()
+    row = db.session.get(models.Experience, experience_id)
+    experience_file = row.experience_file if row else None
+    if row:
+        db.session.delete(row)
+        db.session.commit()
 
     if experience_file:
         _cloudinary_delete(experience_file)
@@ -1487,16 +1551,11 @@ def delete_experience(experience_id):
 @app.route("/admin/certifications/<int:cert_id>/delete", methods=["POST"])
 @login_required
 def delete_certification(cert_id):
-    conn = db_connect()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT certificate_file FROM certifications WHERE id = ?", (cert_id,))
-    row = cursor.fetchone()
-    certificate_file = row[0] if row else None
-
-    cursor.execute("DELETE FROM certifications WHERE id = ?", (cert_id,))
-    conn.commit()
-    conn.close()
+    row = db.session.get(models.Certification, cert_id)
+    certificate_file = row.certificate_file if row else None
+    if row:
+        db.session.delete(row)
+        db.session.commit()
 
     if certificate_file:
         _cloudinary_delete(certificate_file)
@@ -1542,11 +1601,12 @@ def upload_resume():
             file.save(file_path)
             stored_value = filename
 
-        conn = db_connect()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE profile SET resume_file = ? WHERE id = 1", (stored_value,))
-        conn.commit()
-        conn.close()
+        profile = db.session.get(models.Profile, 1)
+        if profile is None:
+            profile = models.Profile(id=1)
+            db.session.add(profile)
+        profile.resume_file = stored_value
+        db.session.commit()
 
         flash("Resume uploaded successfully!", "success")
         return redirect(url_for("admin"))
@@ -1572,13 +1632,11 @@ def upload_profile_image():
             return redirect(url_for("admin"))
 
         # Remove old profile image if exists
-        conn = db_connect()
-        cursor = conn.cursor()
-        cursor.execute("SELECT profile_image FROM profile WHERE id = 1")
-        old_image = cursor.fetchone()
-        if old_image and old_image[0]:
-            _cloudinary_delete(old_image[0])
-            old_path = os.path.join(UPLOAD_PROFILE, old_image[0])
+        profile = db.session.get(models.Profile, 1)
+        old_image = (profile.profile_image if profile else "") or ""
+        if old_image:
+            _cloudinary_delete(old_image)
+            old_path = os.path.join(UPLOAD_PROFILE, old_image)
             if os.path.exists(old_path):
                 os.remove(old_path)
 
@@ -1592,9 +1650,11 @@ def upload_profile_image():
             file.save(file_path)
             stored_value = filename
 
-        cursor.execute("UPDATE profile SET profile_image = ? WHERE id = 1", (stored_value,))
-        conn.commit()
-        conn.close()
+        if profile is None:
+            profile = models.Profile(id=1)
+            db.session.add(profile)
+        profile.profile_image = stored_value
+        db.session.commit()
 
         flash("Profile image uploaded successfully!", "success")
         return redirect(url_for("admin"))

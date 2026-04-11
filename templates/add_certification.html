@@ -68,7 +68,7 @@
                                 <span class="cert-card__platform">{{ cert[2] }}</span>
                             </div>
                             <p class="cert-card__year">{{ cert[3] }}</p>
-                            <a href="{{ url_for('uploaded_certificate', filename=cert[4]) }}" target="_blank"
+                            <a href="{{ file_url(cert[4], 'uploaded_certificate') }}" target="_blank"
                                 class="btn btn--secondary btn--small">View Certificate</a>
                         </article>
                         {% endfor %}

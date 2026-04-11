@@ -87,3 +87,52 @@ Common causes:
 
 In Render: **Manual Deploy → Clear build cache & deploy** if you suspect stale build output.
 Browsers can still cache assets aggressively; this app includes static cache-busting, and disables cache for `/static/*`.
+
+---
+
+## Production-Ready Persistence (Recommended): PostgreSQL + Cloudinary
+
+Render’s default filesystem is **ephemeral**, so **SQLite files** and the local `uploads/` folder can be lost on restart/redeploy.
+For an industry-standard “real app” setup:
+
+- **PostgreSQL** for persistent data (`DATABASE_URL`)
+- **Cloudinary** for images/files (`CLOUDINARY_URL`) — store only `secure_url` in the DB
+- **Flask-Migrate** for schema management (migrations)
+
+### 1) Environment variables (Render Web Service)
+
+- `SECRET_KEY` (or `FLASK_SECRET`) : long random string
+- `DATABASE_URL` : managed Postgres connection string
+- `CLOUDINARY_URL` : `cloudinary://<api_key>:<api_secret>@<cloud_name>`
+- `TRUST_PROXY_HEADERS=true`
+
+### 2) Install dependencies
+
+`pip install -r requirements.txt`
+
+### 3) Initialize migrations (one-time per repo)
+
+Windows (PowerShell):
+
+`$env:FLASK_APP='app.py'`
+`flask db init`
+
+Linux/macOS:
+
+`export FLASK_APP=app.py`
+`flask db init`
+
+### 4) Create + apply migrations
+
+`flask db migrate -m "init schema"`
+`flask db upgrade`
+
+### 5) Render commands
+
+- **Build Command**: `pip install -r requirements.txt`
+- **Start Command**: `gunicorn app:app --bind 0.0.0.0:$PORT`
+
+### Notes
+
+- Do **not** rely on local file storage in production. If Cloudinary is enabled, uploads are saved as Cloudinary URLs.
+- This repo still supports a local SQLite fallback for development, but production should always use `DATABASE_URL`.
