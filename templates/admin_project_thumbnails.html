@@ -46,7 +46,7 @@
                     {% for item in thumbnails %}
                     <article class="project-card">
                         <div class="project-card__image">
-                            <img src="{{ url_for('uploaded_project_thumbnail', filename=item.image_file) }}" alt="{{ item.title }}">
+                            <img src="{{ asset_url(item.image_file) }}" alt="{{ item.title }}">
                         </div>
                         <h3 class="project-card__title">{{ item.title }}</h3>
                         <div class="project-card__links">

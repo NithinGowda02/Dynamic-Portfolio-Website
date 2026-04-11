@@ -10,7 +10,7 @@
 
             <div class="hero__actions">
                 {% if profile and profile[7] %}
-                <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="btn btn--primary" download>Download Resume</a>
+                <a href="{{ asset_url(profile[7]) }}" class="btn btn--primary" download>Download Resume</a>
                 {% else %}
                 <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" download>Download Resume</a>
                 {% endif %}
@@ -22,7 +22,7 @@
             <div class="profile-frame" aria-hidden="false">
                 <div class="profile-frame__inner">
                     {% if profile and profile[8] %}
-                    <img class="profile-frame__img" src="{{ url_for('uploaded_profile', filename=profile[8]) }}"
+                    <img class="profile-frame__img" src="{{ asset_url(profile[8]) }}"
                         alt="{{ profile[1] if profile else 'Nithin' }}">
                     {% else %}
                     <img class="profile-frame__img" src="{{ url_for('static', filename='images/Profile.jpg') }}"
@@ -41,9 +41,9 @@
     <div class="about-bridge__wrap">
         <div class="about-bridge__sticker">
             {% if about_intro and about_intro.about_image %}
-            <img src="{{ url_for('uploaded_about', filename=about_intro.about_image) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            <img src="{{ asset_url(about_intro.about_image) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
             {% elif profile and profile[8] %}
-            <img src="{{ url_for('uploaded_profile', filename=profile[8]) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            <img src="{{ asset_url(profile[8]) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
             {% else %}
             <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="{{ profile[1] if profile else 'Profile image' }}">
             {% endif %}
@@ -93,7 +93,7 @@
                 {% if project_thumbnails %}
                 {% for item in project_thumbnails %}
                 <div class="slide">
-                    <img src="{{ url_for('uploaded_project_thumbnail', filename=item.image_file) }}" alt="{{ item.title }} thumbnail">
+                    <img src="{{ asset_url(item.image_file) }}" alt="{{ item.title }} thumbnail">
                 </div>
                 {% endfor %}
                 {% else %}
@@ -131,7 +131,7 @@
                             <div class="proj-gallery__track" data-gallery-track>
                                 {% for img in imgs[:6] %}
                                 <div class="proj-gallery__slide" data-gallery-slide>
-                                    <img src="{{ url_for('uploaded_project', filename=img) }}" alt="{{ project.title }} screenshot {{ loop.index }}">
+                                    <img src="{{ asset_url(img) }}" alt="{{ project.title }} screenshot {{ loop.index }}">
                                 </div>
                                 {% endfor %}
                             </div>
@@ -282,7 +282,7 @@
                     <span class="cert-card__platform">{{ cert[2] }}</span>
                 </div>
                 <p class="cert-card__year">{{ cert[3] }}</p>
-                <a href="{{ url_for('uploaded_certificate', filename=cert[4]) }}" target="_blank"
+                <a href="{{ asset_url(cert[4]) }}" target="_blank"
                     class="btn btn--secondary btn--small">
                     View Certificate
                 </a>
@@ -349,7 +349,7 @@
             <a href="{{ profile[6] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">LinkedIn</a>
             {% endif %}
             {% if profile[7] %}
-            <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="btn btn--secondary" target="_blank">Download Resume</a>
+            <a href="{{ asset_url(profile[7]) }}" class="btn btn--secondary" target="_blank">Download Resume</a>
             {% endif %}
         </div>
         {% endif %}

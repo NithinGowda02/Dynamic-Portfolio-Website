@@ -81,7 +81,7 @@
                         </div>
                         <p class="cert-card__year">{{ cert[3] }}</p>
                         <div class="form__actions">
-                            <a href="{{ url_for('uploaded_certificate', filename=cert[4]) }}" target="_blank"
+                            <a href="{{ asset_url(cert[4]) }}" target="_blank"
                                 class="btn btn--secondary btn--small">View Certificate</a>
                             <form action="{{ url_for('delete_certification', cert_id=cert[0]) }}" method="post">
                                 <button type="submit" class="btn btn--ghost btn--small"

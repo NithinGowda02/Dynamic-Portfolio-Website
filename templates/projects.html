@@ -24,7 +24,7 @@
                             <div class="proj-gallery__track" data-gallery-track>
                                 {% for img in imgs[:6] %}
                                 <div class="proj-gallery__slide" data-gallery-slide>
-                                    <img src="{{ url_for('uploaded_project', filename=img) }}" alt="{{ project.title }} screenshot {{ loop.index }}">
+                                    <img src="{{ asset_url(img) }}" alt="{{ project.title }} screenshot {{ loop.index }}">
                                 </div>
                                 {% endfor %}
                             </div>
@@ -32,7 +32,7 @@
                         <div class="proj-gallery__thumbs">
                             {% for img in imgs[:6] %}
                             <button type="button" class="proj-gallery__thumb" data-gallery-thumb data-gallery-index="{{ loop.index0 }}" aria-label="View screenshot {{ loop.index }}">
-                                <img src="{{ url_for('uploaded_project', filename=img) }}" alt="">
+                                <img src="{{ asset_url(img) }}" alt="">
                             </button>
                             {% endfor %}
                         </div>

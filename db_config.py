@@ -12,13 +12,11 @@ def _normalize_database_url(url: str) -> str:
     return u
 
 
-def get_database_uri(*, sqlite_fallback_path: str) -> str:
+def get_database_uri() -> str:
     database_url = os.environ.get("DATABASE_URL", "").strip()
-    if database_url:
-        return _normalize_database_url(database_url)
-    # Dev-only fallback (do not rely on this in production).
-    sqlite_path = os.path.abspath(sqlite_fallback_path)
-    # Use forward slashes for SQLite URI compatibility on Windows.
-    sqlite_path = sqlite_path.replace("\\", "/")
-    return f"sqlite:///{sqlite_path}"
-
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL is required. This app no longer supports local database files; "
+            "configure PostgreSQL and set DATABASE_URL."
+        )
+    return _normalize_database_url(database_url)

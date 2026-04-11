@@ -1,20 +1,23 @@
 __pycache__/
 *.py[cod]
+.venv/
+venv/
+.env
 
-# Local SQLite artifacts
+# Local database artifacts (not used in production)
+*.db
 *.db-journal
 *.db-wal
 *.db-shm
+data/
 
 # Uploads are user-generated content (keep out of git)
 uploads/
 
-# Local data DBs
-data/*.db-journal
-data/*.db-wal
-data/*.db-shm
+# Workspace artifacts (accidental nested copy)
+Portfolio_website/
+archive/
 
 # Windows noise
 Thumbs.db
 Desktop.ini
-

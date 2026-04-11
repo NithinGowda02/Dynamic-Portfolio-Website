@@ -1,67 +1,56 @@
 ﻿import os
-import sqlite3
-from datetime import datetime
-from typing import Optional
 
-from flask import Flask, flash, jsonify, redirect, render_template, request, send_from_directory, session, url_for
+
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
 
 from db_config import get_database_uri
 from extensions import db, migrate
 
 # ---------------------------------------------------------------------------
-# Cloudinary – optional cloud storage backend.
-# Set CLOUDINARY_URL  (e.g. cloudinary://api_key:api_secret@cloud_name)
-# OR set the three separate env vars below.
-# When these are absent the app falls back to local disk (same as before).
+# Cloudinary – required storage backend.
+# Configure ONLY via CLOUDINARY_URL (cloudinary://api_key:api_secret@cloud_name).
+# No local filesystem fallback is allowed in production.
 # ---------------------------------------------------------------------------
 try:
     import cloudinary
     import cloudinary.uploader
 
-    # Let Cloudinary parse CLOUDINARY_URL automatically first.
+    # Cloudinary reads CLOUDINARY_URL from the environment.
     cloudinary.config(secure=True)
 
-    # If discrete env vars are provided, they should override CLOUDINARY_URL.
-    _cld_overrides = {}
-    _cld_name = os.environ.get("CLOUDINARY_CLOUD_NAME")
-    _cld_key = os.environ.get("CLOUDINARY_API_KEY")
-    _cld_secret = os.environ.get("CLOUDINARY_API_SECRET")
-    if _cld_name:
-        _cld_overrides["cloud_name"] = _cld_name
-    if _cld_key:
-        _cld_overrides["api_key"] = _cld_key
-    if _cld_secret:
-        _cld_overrides["api_secret"] = _cld_secret
-    if _cld_overrides:
-        cloudinary.config(**_cld_overrides)
-
     _CLOUDINARY_ENABLED = bool(
-        cloudinary.config().cloud_name
+        (os.environ.get("CLOUDINARY_URL", "").strip())
+        and cloudinary.config().cloud_name
         and cloudinary.config().api_key
         and cloudinary.config().api_secret
     )
 except ImportError:
+    cloudinary = None  # type: ignore[assignment]
     _CLOUDINARY_ENABLED = False
 
 
-def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> Optional[str]:
-    """Upload *file_obj* to Cloudinary and return the secure URL, or None on failure."""
+def _require_cloudinary() -> None:
     if not _CLOUDINARY_ENABLED:
-        return None
-    try:
-        result = cloudinary.uploader.upload(
-            file_obj,
-            folder=folder,
-            resource_type=resource_type,
-            overwrite=True,
+        raise RuntimeError(
+            "CLOUDINARY_URL is required for uploads. This app no longer supports local file storage."
         )
-        return result.get("secure_url")
-    except Exception as exc:
-        print(f"[WARN] Cloudinary upload failed: {exc}")
-        return None
+
+
+def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> str:
+    """Upload *file_obj* to Cloudinary and return the secure URL."""
+    _require_cloudinary()
+    result = cloudinary.uploader.upload(
+        file_obj,
+        folder=folder,
+        resource_type=resource_type,
+        overwrite=True,
+    )
+    url = (result or {}).get("secure_url")
+    if not url:
+        raise RuntimeError("Cloudinary upload succeeded but no secure_url was returned.")
+    return url
 
 
 def _cloudinary_delete(url_or_path: str) -> None:
@@ -81,9 +70,6 @@ def _cloudinary_delete(url_or_path: str) -> None:
     except Exception as exc:
         print(f"[WARN] Cloudinary delete failed: {exc}")
 
-
-def _is_url(value: str) -> bool:
-    return bool(value and value.startswith("http"))
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET", "dev-secret")
@@ -124,81 +110,31 @@ def login_required(f):
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
-def _resolve_storage_root():
-    """
-    Storage root for mutable data (SQLite DB + user uploads).
-
-    On Render and similar platforms, the filesystem is ephemeral across deploys unless you mount a
-    persistent disk. Point PORTFOLIO_STORAGE_DIR at that mount path (e.g., /var/data) so content
-    added from the admin dashboard survives redeploys.
-    """
-    root = os.environ.get("PORTFOLIO_STORAGE_DIR", "").strip()
-    if not root:
-        return BASE_DIR
-    if os.path.isabs(root):
-        return os.path.abspath(root)
-    return os.path.abspath(os.path.join(BASE_DIR, root))
-
-
-STORAGE_ROOT = _resolve_storage_root()
-
-# Prefer a clean, writable DB file. Keep it out of /static and /uploads.
-DATA_DIR = os.path.join(STORAGE_ROOT, "data")
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_PRIMARY_PATH = os.path.join(DATA_DIR, os.environ.get("PORTFOLIO_DB", "portfolio.db"))
-# Legacy location used by older versions of the app.
-DB_LEGACY_PATH = os.path.join(BASE_DIR, "portfolio.db")
-# If the primary DB is left with a locked hot-journal (common on Windows when a process crashes or holds the file),
-# SQLite can start throwing "disk I/O error" on open. Keep a fallback copy that we can switch to automatically.
-DB_FALLBACK_PATH = os.path.join(DATA_DIR, "portfolio_live.db")
-UPLOADS_ROOT = os.path.join(STORAGE_ROOT, "uploads")
-UPLOAD_CERTIFICATES = os.path.join(UPLOADS_ROOT, "certificates")
-UPLOAD_PROJECTS_NEW = os.path.join(UPLOADS_ROOT, "projects")
-# Legacy flat folder used by older versions of the app.
-UPLOAD_PROJECTS_LEGACY = os.path.join(UPLOADS_ROOT, "project_images")
-UPLOAD_PROJECT_THUMBNAILS = os.path.join(UPLOADS_ROOT, "project_thumbnails")
-UPLOAD_PROFILE = os.path.join(UPLOADS_ROOT, "profile")
-UPLOAD_ABOUT = os.path.join(UPLOADS_ROOT, "about")
-UPLOAD_RESUME = os.path.join(UPLOADS_ROOT, "resume")
-UPLOAD_EXPERIENCE = os.path.join(UPLOADS_ROOT, "experience")
-
 ALLOWED_EXTENSIONS_PDF = {"pdf"}
 ALLOWED_EXTENSIONS_IMG = {"png", "jpg", "jpeg", "gif", "svg"}
 
-for folder in [
-    UPLOAD_CERTIFICATES,
-    UPLOAD_PROJECTS_NEW,
-    UPLOAD_PROJECTS_LEGACY,
-    UPLOAD_PROJECT_THUMBNAILS,
-    UPLOAD_PROFILE,
-    UPLOAD_ABOUT,
-    UPLOAD_RESUME,
-    UPLOAD_EXPERIENCE,
-]:
-    os.makedirs(folder, exist_ok=True)
-
 
 # ---------------------------------------------------------------------------
-# Database (production: PostgreSQL via DATABASE_URL; dev fallback: local SQLite)
+# Database (PostgreSQL via DATABASE_URL only)
 # ---------------------------------------------------------------------------
-app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri(sqlite_fallback_path=DB_PRIMARY_PATH)
+app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
 db.init_app(app)
 migrate.init_app(app, db)
 
 # Register ORM models for Flask-Migrate / SQLAlchemy.
 import models  # noqa: E402
 
-_USING_EXTERNAL_DB = bool(os.environ.get("DATABASE_URL", "").strip())
 _AUTO_DB_CREATE = os.environ.get("AUTO_DB_CREATE", "").strip().lower() in {"1", "true", "yes"}
-if not _USING_EXTERNAL_DB:
-    # Local development convenience: auto-create tables for the SQLite fallback.
+if not os.environ.get("AUTO_DB_CREATE", "").strip():
+    # Safe default: create tables if they don't exist yet.
+    # For mature deployments, set AUTO_DB_CREATE=false and run migrations instead.
     _AUTO_DB_CREATE = True
 
 if _AUTO_DB_CREATE:
     with app.app_context():
         db.create_all()
-        # Ensure singleton rows exist (mirrors the old SQLite bootstrapping logic).
         from models import AboutContent, AboutIntro  # noqa: E402
 
         if db.session.get(AboutContent, 1) is None:
@@ -206,51 +142,6 @@ if _AUTO_DB_CREATE:
         if db.session.get(AboutIntro, 1) is None:
             db.session.add(AboutIntro(id=1, headline="", role_line="", short_desc="", about_image=""))
         db.session.commit()
-
-
-def db_connect():
-    """
-    Connect to the primary DB and apply pragmas that avoid creating *-journal files.
-    """
-    def _connect_and_probe(path):
-        conn = sqlite3.connect(path, timeout=5)
-        try:
-            # Avoid creating any *-journal files (some Windows setups lock them aggressively).
-            conn.execute("PRAGMA journal_mode=OFF")
-            conn.execute("PRAGMA temp_store=MEMORY")
-            conn.execute("PRAGMA foreign_keys=ON")
-        except sqlite3.OperationalError:
-            # Read-only connections may reject PRAGMA writes.
-            pass
-        # Some failures only show up when the first query runs (e.g. locked journal / disk I/O).
-        cur = conn.cursor()
-        cur.execute("PRAGMA schema_version")
-        cur.fetchone()
-        return conn
-
-    try:
-        return _connect_and_probe(DB_PRIMARY_PATH)
-    except sqlite3.OperationalError as exc:
-        # Self-heal: if the primary DB is in a bad journal state (locked/permission denied),
-        # fall back to a copied DB file so the site keeps working.
-        msg = str(exc).lower()
-        if "disk i/o" not in msg and "i/o error" not in msg:
-            raise
-
-        try:
-            if not os.path.exists(DB_FALLBACK_PATH) and os.path.exists(DB_PRIMARY_PATH):
-                # Best-effort copy; ignore journals and just duplicate the main DB file.
-                with open(DB_PRIMARY_PATH, "rb") as src, open(DB_FALLBACK_PATH, "wb") as dst:
-                    dst.write(src.read())
-        except OSError:
-            # If copying fails, still try opening fallback if it exists.
-            pass
-
-        if os.path.exists(DB_FALLBACK_PATH):
-            return _connect_and_probe(DB_FALLBACK_PATH)
-
-        # Nothing to fall back to; re-raise the original error.
-        raise
 
 
 def allowed_file(filename, allowed_ext):
@@ -277,227 +168,23 @@ def inject_static_version():
 
 
 @app.context_processor
-def inject_file_url():
-    def file_url(value, route, **kwargs):
-        """Return a direct URL if value is already a cloud URL, else use url_for."""
+def inject_asset_url():
+    def asset_url(value: str) -> str:
+        """
+        Return a Cloudinary URL stored in the DB.
+
+        This app no longer supports local /uploads paths. Any non-URL value indicates stale data
+        that must be re-uploaded to Cloudinary (and the DB updated to store secure_url).
+        """
         if not value:
             return ""
         if value.startswith("http"):
             return value
-        return url_for(route, filename=value, **kwargs)
-    return {"file_url": file_url}
+        # Stale data from older deployments may contain local paths/filenames.
+        # We intentionally do not try to serve from disk in production.
+        return ""
 
-# CREATE DATABASE TABLE
-def init_db():
-    conn = db_connect()
-    cursor = conn.cursor()
-
-    def _ensure_column(table, column, col_def):
-        # SQLite doesn't support ADD COLUMN IF NOT EXISTS.
-        cursor.execute(f"PRAGMA table_info({table})")
-        cols = {row[1] for row in cursor.fetchall()}
-        if column not in cols:
-            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS projects(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT,
-    description TEXT,
-    tech_stack TEXT,
-    github_link TEXT,
-    project_image TEXT,
-    live_demo TEXT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS project_images(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id INTEGER NOT NULL,
-    image_file TEXT NOT NULL,
-    sort_order INTEGER DEFAULT 0,
-    FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS project_thumbnails(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    image_file TEXT NOT NULL,
-    sort_order INTEGER DEFAULT 0
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS skills(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    skill_name TEXT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS experience(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    role TEXT,
-    organization TEXT,
-    duration TEXT,
-    description TEXT,
-    experience_file TEXT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS certifications(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT,
-    platform TEXT,
-    year TEXT,
-    certificate_file TEXT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS profile(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    title TEXT,
-    about TEXT,
-    email TEXT,
-    github TEXT,
-    linkedin TEXT,
-    resume_file TEXT,
-    profile_image TEXT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS about_content(
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    preview_text TEXT,
-    details_text TEXT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS about_intro(
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    headline TEXT,
-    role_line TEXT,
-    short_desc TEXT,
-    about_image TEXT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS about_interests(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    label TEXT,
-    count_value INTEGER DEFAULT 0,
-    sort_order INTEGER DEFAULT 0
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS highlights(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    icon_key TEXT,
-    title TEXT,
-    description TEXT,
-    sort_order INTEGER DEFAULT 0
-    )
-    """)
-
-    # Ensure we always have one about row to update.
-    cursor.execute("INSERT OR IGNORE INTO about_content (id, preview_text, details_text) VALUES (1, '', '')")
-
-    # Backfill schema for older DBs.
-    try:
-        _ensure_column("about_intro", "about_image", "TEXT")
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        _ensure_column("experience", "experience_file", "TEXT")
-    except sqlite3.OperationalError:
-        pass
-
-    cursor.execute(
-        "INSERT OR IGNORE INTO about_intro (id, headline, role_line, short_desc, about_image) VALUES (1, '', '', '', '')"
-    )
-
-    # If an older DB exists at the legacy path, migrate project-related tables into the new primary DB
-    # when the primary DB has no projects yet. This prevents "0 Projects" and empty Projects pages
-    # after upgrading the app's DB location.
-    try:
-        if os.path.exists(DB_LEGACY_PATH) and os.path.abspath(DB_LEGACY_PATH) != os.path.abspath(DB_PRIMARY_PATH):
-            cursor.execute("SELECT COUNT(*) FROM projects")
-            primary_projects = cursor.fetchone()[0]
-            if primary_projects == 0:
-                cursor.execute("ATTACH DATABASE ? AS legacy", (DB_LEGACY_PATH,))
-                try:
-                    cursor.execute("SELECT 1 FROM legacy.sqlite_master WHERE type='table' AND name='projects' LIMIT 1")
-                    if cursor.fetchone():
-                        cursor.execute("SELECT COUNT(*) FROM legacy.projects")
-                        legacy_projects = cursor.fetchone()[0]
-                        if legacy_projects > 0:
-                            for table in ("projects", "project_images", "project_thumbnails"):
-                                cursor.execute(
-                                    "SELECT 1 FROM legacy.sqlite_master WHERE type='table' AND name=? LIMIT 1",
-                                    (table,),
-                                )
-                                if not cursor.fetchone():
-                                    continue
-
-                                cursor.execute(f"SELECT COUNT(*) FROM {table}")
-                                if cursor.fetchone()[0] != 0:
-                                    continue
-
-                                cursor.execute(f"PRAGMA table_info({table})")
-                                main_cols = [r[1] for r in cursor.fetchall()]
-                                cursor.execute(f"PRAGMA legacy.table_info({table})")
-                                legacy_cols = {r[1] for r in cursor.fetchall()}
-                                cols = [c for c in main_cols if c in legacy_cols]
-                                if not cols:
-                                    continue
-
-                                col_list = ", ".join(cols)
-                                cursor.execute(
-                                    f"INSERT INTO {table} ({col_list}) SELECT {col_list} FROM legacy.{table}"
-                                )
-
-                                # Keep AUTOINCREMENT sequences consistent after inserting explicit ids.
-                                try:
-                                    cursor.execute(
-                                        "INSERT OR IGNORE INTO sqlite_sequence(name, seq) VALUES (?, 0)",
-                                        (table,),
-                                    )
-                                    cursor.execute(
-                                        f"UPDATE sqlite_sequence SET seq=(SELECT COALESCE(MAX(id),0) FROM {table}) WHERE name=?",
-                                        (table,),
-                                    )
-                                except sqlite3.OperationalError:
-                                    pass
-                finally:
-                    try:
-                        cursor.execute("DETACH DATABASE legacy")
-                    except sqlite3.OperationalError:
-                        pass
-    except sqlite3.OperationalError:
-        # Migration is best-effort; ignore if legacy DB is locked/unreadable.
-        pass
-
-    conn.commit()
-    conn.close()
-
-_LEGACY_SQLITE_BOOTSTRAP = os.environ.get("LEGACY_SQLITE_BOOTSTRAP", "").strip().lower() in {"1", "true", "yes"}
-if _LEGACY_SQLITE_BOOTSTRAP:
-    # One-time helper for older dev DBs. Prefer Flask-Migrate in all environments.
-    try:
-        init_db()
-    except sqlite3.OperationalError as exc:
-        print(f"[WARN] LEGACY_SQLITE_BOOTSTRAP init_db() failed: {exc}")
+    return {"asset_url": asset_url}
 
 
 # GET PROJECTS
@@ -665,20 +352,20 @@ def projects_page():
     return render_template("projects.html", projects=projects, profile=profile, about_content=about_content)
 
 
-def _api_file_url(value: str, endpoint: str) -> str:
+def _api_file_url(value: str) -> str:
     if not value:
         return ""
     if value.startswith("http"):
         return value
-    return url_for(endpoint, filename=value)
+    return ""
 
 
 @app.route("/api/projects", methods=["GET"])
 def api_projects_list():
     projects = get_projects()
     for p in projects:
-        p["cover_image_url"] = _api_file_url(p.get("cover_image", ""), "uploaded_project")
-        p["image_urls"] = [_api_file_url(img, "uploaded_project") for img in (p.get("images") or [])]
+        p["cover_image_url"] = _api_file_url(p.get("cover_image", ""))
+        p["image_urls"] = [_api_file_url(img) for img in (p.get("images") or [])]
     return jsonify(projects)
 
 
@@ -696,6 +383,9 @@ def api_projects_create():
     if not title or not description:
         return jsonify({"error": "title and description are required"}), 400
 
+    if cover_image and not cover_image.startswith("http"):
+        return jsonify({"error": "cover_image must be a Cloud URL"}), 400
+
     project = models.Project(
         title=title,
         description=description,
@@ -711,6 +401,8 @@ def api_projects_create():
     if isinstance(images, list):
         for idx, img in enumerate(images[:6]):
             img_val = (img or "").strip()
+            if img_val and not img_val.startswith("http"):
+                return jsonify({"error": "images must be Cloud URLs"}), 400
             if img_val:
                 db.session.add(models.ProjectImage(project_id=project.id, image_file=img_val, sort_order=idx))
 
@@ -736,13 +428,18 @@ def api_projects_update(project_id: int):
     ]:
         if field in payload:
             value = payload.get(field)
-            setattr(project, attr, (value or "").strip() or None)
+            cleaned = (value or "").strip() or None
+            if field == "cover_image" and cleaned and not cleaned.startswith("http"):
+                return jsonify({"error": "cover_image must be a Cloud URL"}), 400
+            setattr(project, attr, cleaned)
 
     if "images" in payload and isinstance(payload.get("images"), list):
         # Replace image list (max 6).
         project.images = []
         for idx, img in enumerate((payload.get("images") or [])[:6]):
             img_val = (img or "").strip()
+            if img_val and not img_val.startswith("http"):
+                return jsonify({"error": "images must be Cloud URLs"}), 400
             if img_val:
                 project.images.append(models.ProjectImage(image_file=img_val, sort_order=idx))
 
@@ -888,14 +585,7 @@ def admin_certifications():
             return redirect(url_for("admin_certifications"))
 
         if file and allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
-            filename = secure_filename(file.filename)
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            filename = f"{timestamp}_{filename}"
-
-            cloud_url = _cloudinary_upload(file, "portfolio/certificates", resource_type="raw")
-            stored_value = cloud_url if cloud_url else filename
-            if not cloud_url:
-                file.save(os.path.join(UPLOAD_CERTIFICATES, filename))
+            stored_value = _cloudinary_upload(file, "portfolio/certificates", resource_type="raw")
 
             db.session.add(
                 models.Certification(
@@ -931,14 +621,7 @@ def add_certification():
             return redirect(url_for("admin"))
 
         if file and allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
-            filename = secure_filename(file.filename)
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            filename = f"{timestamp}_{filename}"
-
-            cloud_url = _cloudinary_upload(file, "portfolio/certificates", resource_type="raw")
-            stored_value = cloud_url if cloud_url else filename
-            if not cloud_url:
-                file.save(os.path.join(UPLOAD_CERTIFICATES, filename))
+            stored_value = _cloudinary_upload(file, "portfolio/certificates", resource_type="raw")
 
             db.session.add(
                 models.Certification(
@@ -1007,21 +690,9 @@ def admin_projects():
 
     if valid_files:
         project_folder_name = f"project_{project_id}"
-        project_folder = os.path.join(UPLOAD_PROJECTS_NEW, project_folder_name)
-        os.makedirs(project_folder, exist_ok=True)
-
         saved = []
         for f in valid_files:
-            filename = secure_filename(f.filename)
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            filename = f"{timestamp}_{filename}"
-
-            cloud_url = _cloudinary_upload(f, f"portfolio/projects/{project_folder_name}")
-            if cloud_url:
-                saved.append(cloud_url)
-            else:
-                f.save(os.path.join(project_folder, filename))
-                saved.append(f"{project_folder_name}/{filename}")
+            saved.append(_cloudinary_upload(f, f"portfolio/projects/{project_folder_name}"))
 
         cover = saved[0]
         project.project_image = cover
@@ -1062,34 +733,6 @@ def delete_project(project_id):
     for rel in image_files:
         _cloudinary_delete(rel)
 
-    # Try to remove uploaded files/folders. Ignore failures (Windows locks etc).
-    try:
-        # New structure: uploads/projects/project_<id>/...
-        project_folder = os.path.join(UPLOAD_PROJECTS_NEW, f"project_{project_id}")
-        if os.path.isdir(project_folder):
-            for root, _dirs, files in os.walk(project_folder, topdown=False):
-                for f in files:
-                    try:
-                        os.remove(os.path.join(root, f))
-                    except OSError:
-                        pass
-            try:
-                os.rmdir(project_folder)
-            except OSError:
-                pass
-
-        # Also try to remove individual files (works for legacy flat storage too).
-        for rel in image_files:
-            for base in (UPLOAD_PROJECTS_NEW, UPLOAD_PROJECTS_LEGACY):
-                abs_path = os.path.join(base, rel)
-                if os.path.isfile(abs_path):
-                    try:
-                        os.remove(abs_path)
-                    except OSError:
-                        pass
-    except OSError:
-        pass
-
     flash("Project deleted.", "success")
     return redirect(url_for("admin_projects_manage"))
 
@@ -1114,14 +757,7 @@ def admin_project_thumbnails_add():
     except ValueError:
         sort_order_val = 0
 
-    filename = secure_filename(file.filename)
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    filename = f"{timestamp}_{filename}"
-
-    cloud_url = _cloudinary_upload(file, "portfolio/project_thumbnails")
-    stored_value = cloud_url if cloud_url else filename
-    if not cloud_url:
-        file.save(os.path.join(UPLOAD_PROJECT_THUMBNAILS, filename))
+    stored_value = _cloudinary_upload(file, "portfolio/project_thumbnails")
 
     db.session.add(
         models.ProjectThumbnail(
@@ -1154,12 +790,6 @@ def delete_project_thumbnail(thumb_id):
 
     if img:
         _cloudinary_delete(img)
-        try:
-            p = os.path.join(UPLOAD_PROJECT_THUMBNAILS, img)
-            if os.path.exists(p):
-                os.remove(p)
-        except OSError:
-            pass
 
     flash("Thumbnail deleted.", "success")
     return redirect(url_for("admin_project_thumbnails_manage"))
@@ -1235,16 +865,7 @@ def admin_experience():
             flash("Invalid file type. Please upload a PDF.", "error")
             return redirect(url_for("admin"))
 
-        filename = secure_filename(file.filename)
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        base_filename = f"{timestamp}_{filename}"
-
-        cloud_url = _cloudinary_upload(file, "portfolio/experience", resource_type="raw")
-        if cloud_url:
-            experience_filename = cloud_url
-        else:
-            file.save(os.path.join(UPLOAD_EXPERIENCE, base_filename))
-            experience_filename = base_filename
+        experience_filename = _cloudinary_upload(file, "portfolio/experience", resource_type="raw")
 
     db.session.add(
         models.Experience(
@@ -1288,16 +909,7 @@ def add_experience():
                 flash("Invalid file type. Please upload a PDF.", "error")
                 return redirect(url_for("admin"))
 
-            filename = secure_filename(file.filename)
-            timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-            base_filename = f"{timestamp}_{filename}"
-
-            cloud_url = _cloudinary_upload(file, "portfolio/experience", resource_type="raw")
-            if cloud_url:
-                experience_filename = cloud_url
-            else:
-                file.save(os.path.join(UPLOAD_EXPERIENCE, base_filename))
-                experience_filename = base_filename
+            experience_filename = _cloudinary_upload(file, "portfolio/experience", resource_type="raw")
 
         db.session.add(
             models.Experience(
@@ -1402,14 +1014,7 @@ def admin_about_image():
         flash("Please upload a valid image file (png/jpg/jpeg/gif/svg).", "error")
         return redirect(url_for("admin"))
 
-    filename = secure_filename(file.filename)
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    filename = f"{timestamp}_{filename}"
-
-    cloud_url = _cloudinary_upload(file, "portfolio/about")
-    stored_value = cloud_url if cloud_url else filename
-    if not cloud_url:
-        file.save(os.path.join(UPLOAD_ABOUT, filename))
+    stored_value = _cloudinary_upload(file, "portfolio/about")
 
     row = db.session.get(models.AboutIntro, 1)
     if row is None:
@@ -1540,9 +1145,6 @@ def delete_experience(experience_id):
 
     if experience_file:
         _cloudinary_delete(experience_file)
-        file_path = os.path.join(UPLOAD_EXPERIENCE, experience_file)
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
     flash("Experience deleted.", "success")
     return redirect(url_for("admin_experience_manage"))
@@ -1559,9 +1161,6 @@ def delete_certification(cert_id):
 
     if certificate_file:
         _cloudinary_delete(certificate_file)
-        file_path = os.path.join(UPLOAD_CERTIFICATES, certificate_file)
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
     flash("Certification deleted.", "success")
     return redirect(url_for("admin_certifications"))
@@ -1591,15 +1190,7 @@ def upload_resume():
             flash("Invalid file type. Only PDF files are allowed.", "error")
             return redirect(url_for("admin"))
 
-        filename = secure_filename(f"resume_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
-
-        cloud_url = _cloudinary_upload(file, "portfolio/resume", resource_type="raw")
-        if cloud_url:
-            stored_value = cloud_url
-        else:
-            file_path = os.path.join(UPLOAD_RESUME, filename)
-            file.save(file_path)
-            stored_value = filename
+        stored_value = _cloudinary_upload(file, "portfolio/resume", resource_type="raw")
 
         profile = db.session.get(models.Profile, 1)
         if profile is None:
@@ -1636,19 +1227,8 @@ def upload_profile_image():
         old_image = (profile.profile_image if profile else "") or ""
         if old_image:
             _cloudinary_delete(old_image)
-            old_path = os.path.join(UPLOAD_PROFILE, old_image)
-            if os.path.exists(old_path):
-                os.remove(old_path)
 
-        filename = secure_filename(f"profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{file.filename.rsplit('.', 1)[1].lower()}")
-
-        cloud_url = _cloudinary_upload(file, "portfolio/profile")
-        if cloud_url:
-            stored_value = cloud_url
-        else:
-            file_path = os.path.join(UPLOAD_PROFILE, filename)
-            file.save(file_path)
-            stored_value = filename
+        stored_value = _cloudinary_upload(file, "portfolio/profile")
 
         if profile is None:
             profile = models.Profile(id=1)
@@ -1665,68 +1245,10 @@ def upload_profile_image():
 
 
 
-@app.route("/uploads/certificates/<path:filename>")
-def uploaded_certificate(filename):
-    if _is_url(filename):
-        return redirect(filename)
-    return send_from_directory(UPLOAD_CERTIFICATES, filename)
-
-
-@app.route("/uploads/projects/<path:filename>")
-def uploaded_project(filename):
-    if _is_url(filename):
-        return redirect(filename)
-    new_path = os.path.join(UPLOAD_PROJECTS_NEW, filename)
-    if os.path.exists(new_path):
-        return send_from_directory(UPLOAD_PROJECTS_NEW, filename)
-
-    legacy_path = os.path.join(UPLOAD_PROJECTS_LEGACY, filename)
-    if os.path.exists(legacy_path):
-        return send_from_directory(UPLOAD_PROJECTS_LEGACY, filename)
-
-    # Default: try new folder (will 404 with a proper message).
-    return send_from_directory(UPLOAD_PROJECTS_NEW, filename)
-
-
-# Backward-compatible URL (legacy path used in older templates).
-@app.route("/uploads/project_images/<path:filename>")
-def uploaded_project_legacy(filename):
-    return uploaded_project(filename)
-
-
-@app.route("/uploads/profile/<path:filename>")
-def uploaded_profile(filename):
-    if _is_url(filename):
-        return redirect(filename)
-    return send_from_directory(UPLOAD_PROFILE, filename)
-
-
-@app.route("/uploads/about/<path:filename>")
-def uploaded_about(filename):
-    if _is_url(filename):
-        return redirect(filename)
-    return send_from_directory(UPLOAD_ABOUT, filename)
-
-
-@app.route("/uploads/project_thumbnails/<path:filename>")
-def uploaded_project_thumbnail(filename):
-    if _is_url(filename):
-        return redirect(filename)
-    return send_from_directory(UPLOAD_PROJECT_THUMBNAILS, filename)
-
-
-@app.route("/uploads/resume/<path:filename>")
-def uploaded_resume(filename):
-    if _is_url(filename):
-        return redirect(filename)
-    return send_from_directory(UPLOAD_RESUME, filename)
-
-
-@app.route("/uploads/experience/<path:filename>")
-def uploaded_experience(filename):
-    if _is_url(filename):
-        return redirect(filename)
-    return send_from_directory(UPLOAD_EXPERIENCE, filename)
+@app.route("/uploads/<path:_path>")
+def uploads_disabled(_path: str):
+    # Legacy URL path from older versions. Local filesystem storage is no longer supported.
+    abort(410)
 
 
 if __name__ == "__main__":

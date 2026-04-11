@@ -5,9 +5,9 @@
     <div class="about-bridge__wrap">
         <div class="about-bridge__sticker">
             {% if about_intro and about_intro.about_image %}
-            <img src="{{ url_for('uploaded_about', filename=about_intro.about_image) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            <img src="{{ asset_url(about_intro.about_image) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
             {% elif profile and profile[8] %}
-            <img src="{{ url_for('uploaded_profile', filename=profile[8]) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
+            <img src="{{ asset_url(profile[8]) }}" alt="{{ profile[1] if profile else 'Profile image' }}">
             {% else %}
             <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="{{ profile[1] if profile else 'Profile image' }}">
             {% endif %}

@@ -206,10 +206,10 @@
                     <div class="form__actions" style="align-items: center; justify-content: space-between; gap: 12px;">
                         <div style="display:flex; align-items:center; gap:12px;">
                             {% if about_intro and about_intro.about_image %}
-                            <img src="{{ url_for('uploaded_about', filename=about_intro.about_image) }}" alt="About section image"
+                            <img src="{{ asset_url(about_intro.about_image) }}" alt="About section image"
                                 style="width:72px; height:72px; object-fit:cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
                             {% elif profile and profile[8] %}
-                            <img src="{{ url_for('uploaded_profile', filename=profile[8]) }}" alt="Profile image"
+                            <img src="{{ asset_url(profile[8]) }}" alt="Profile image"
                                 style="width:72px; height:72px; object-fit:cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
                             {% else %}
                             <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="Profile image"

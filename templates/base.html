@@ -31,7 +31,7 @@
 
             {% if profile and profile[7] %}
             <li class="nav__item nav__item--mobile-only">
-                <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="nav__link" download>Resume</a>
+                <a href="{{ asset_url(profile[7]) }}" class="nav__link" download>Resume</a>
             </li>
             {% else %}
             <li class="nav__item nav__item--mobile-only">
@@ -49,7 +49,7 @@
 
     <div class="navbar__actions">
         {% if profile and profile[7] %}
-        <a href="{{ url_for('uploaded_resume', filename=profile[7]) }}" class="btn btn--primary" download>Resume</a>
+        <a href="{{ asset_url(profile[7]) }}" class="btn btn--primary" download>Resume</a>
         {% else %}
         <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" download>Resume</a>
         {% endif %}
@@ -113,7 +113,7 @@
                     {% endif %}
 
                     {% if profile and profile[7] %}
-                    <a class="footer__iconlink" href="{{ url_for('uploaded_resume', filename=profile[7]) }}" download aria-label="Download Resume">
+                    <a class="footer__iconlink" href="{{ asset_url(profile[7]) }}" download aria-label="Download Resume">
                         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
                             <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18-5.5 5.5 1.42 1.42L11 6.84V16h2V6.84l3.08 3.08 1.42-1.42L12 2z" />
                         </svg>

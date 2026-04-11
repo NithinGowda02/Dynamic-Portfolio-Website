@@ -47,7 +47,7 @@
                     <article class="project-card">
                         {% if project.cover_image %}
                         <div class="project-card__image">
-                            <img src="{{ url_for('uploaded_project', filename=project.cover_image) }}" alt="{{ project.title }}">
+                            <img src="{{ asset_url(project.cover_image) }}" alt="{{ project.title }}">
                         </div>
                         {% endif %}
                         <h3 class="project-card__title">{{ project.title }}</h3>
