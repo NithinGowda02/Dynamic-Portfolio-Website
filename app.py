@@ -17,8 +17,9 @@ try:
     import cloudinary
     import cloudinary.uploader
 
-    # Cloudinary reads CLOUDINARY_URL from the environment.
     cloudinary.config(secure=True)
+
+    _CLOUDINARY_ENABLED = bool(os.environ.get("CLOUDINARY_URL"))
 
     _CLOUDINARY_ENABLED = bool(
         (os.environ.get("CLOUDINARY_URL", "").strip())
