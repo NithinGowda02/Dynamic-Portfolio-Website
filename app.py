@@ -1,5 +1,6 @@
 ﻿import os
-
+import re
+from functools import wraps
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -9,9 +10,7 @@ from db_config import get_database_uri
 from extensions import db, migrate
 
 # ---------------------------------------------------------------------------
-# Cloudinary – required storage backend.
-# Configure ONLY via CLOUDINARY_URL (cloudinary://api_key:api_secret@cloud_name).
-# No local filesystem fallback is allowed in production.
+# CLOUDINARY (OPTIONAL — now supports GitHub RAW also)
 # ---------------------------------------------------------------------------
 try:
     import cloudinary
@@ -19,28 +18,20 @@ try:
 
     cloudinary.config(secure=True)
 
-    _CLOUDINARY_ENABLED = bool(os.environ.get("CLOUDINARY_URL"))
-
-    _CLOUDINARY_ENABLED = bool(
-        (os.environ.get("CLOUDINARY_URL", "").strip())
+    CLOUDINARY_ENABLED = bool(
+        os.environ.get("CLOUDINARY_URL")
         and cloudinary.config().cloud_name
-        and cloudinary.config().api_key
-        and cloudinary.config().api_secret
     )
 except ImportError:
-    cloudinary = None  # type: ignore[assignment]
-    _CLOUDINARY_ENABLED = False
+    cloudinary = None
+    CLOUDINARY_ENABLED = False
 
 
-def _require_cloudinary() -> None:
-    if not _CLOUDINARY_ENABLED:
-        raise RuntimeError(
-            "CLOUDINARY_URL is required for uploads. This app no longer supports local file storage."
-        )
+def upload_file(file_obj, folder: str, resource_type: str = "auto") -> str:
+    """Upload file to Cloudinary (if enabled)"""
+    if not CLOUDINARY_ENABLED:
+        return ""
 
-
-def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> str:
-    _require_cloudinary()
     result = cloudinary.uploader.upload(
         file_obj,
         folder=folder,
@@ -49,74 +40,62 @@ def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> st
         unique_filename=True,
         overwrite=False,
     )
-    url = (result or {}).get("secure_url")
-    if not url:
-        raise RuntimeError("Cloudinary upload failed: no secure_url")
-    return url  # return plain URL string, not a dict
+    return (result or {}).get("secure_url", "")
 
-def _cloudinary_delete(url_or_public_id: str) -> None:
-    if not _CLOUDINARY_ENABLED or not url_or_public_id:
+
+def delete_file(url: str) -> None:
+    """Delete Cloudinary file safely"""
+    if not CLOUDINARY_ENABLED or not url:
         return
 
     try:
-        public_id = url_or_public_id
+        match = re.search(r"/upload/(?:v\d+/)?(.+?)(?:\.[a-zA-Z0-9]+)?$", url)
+        if match:
+            cloudinary.uploader.destroy(match.group(1))
+    except Exception as e:
+        print(f"[WARN] Delete failed: {e}")
 
-        if url_or_public_id.startswith("http"):
-            import re
-            match = re.search(r"/upload/(?:v\d+/)?(.+?)(?:\.[a-zA-Z0-9]+)?$", url_or_public_id)
-            if not match:
-                return
-            public_id = match.group(1)
 
-        cloudinary.uploader.destroy(public_id)
-
-    except Exception as exc:
-        print(f"[WARN] Cloudinary delete failed: {exc}")
+# ---------------------------------------------------------------------------
+# APP INIT
+# ---------------------------------------------------------------------------
 app = Flask(__name__, static_folder="static", static_url_path="/static")
-app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET", "dev-secret")
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
 
-_trust_proxy = os.environ.get("TRUST_PROXY_HEADERS", "").strip().lower() in {"1", "true", "yes"}
-if _trust_proxy or os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+# Proxy fix (Render / production)
+if os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+# Disable static cache
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 
 @app.after_request
-def _add_static_cache_headers(response):
-    try:
-        path = request.path or ""
-    except Exception:
-        path = ""
-    if path.startswith("/static/"):
+def add_cache_headers(response):
+    if request.path.startswith("/static/"):
         response.headers["Cache-Control"] = "no-store, max-age=0"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
     return response
 
 
-ADMIN_USERNAME = 'admin'
-ADMIN_PASSWORD_HASH = generate_password_hash('admin123')
+# ---------------------------------------------------------------------------
+# AUTH CONFIG
+# ---------------------------------------------------------------------------
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD_HASH = generate_password_hash("admin123")
 
 
 def login_required(f):
-    def decorated_function(*args, **kwargs):
-        if 'admin_logged_in' not in session:
-            flash('Please log in to access this page.', 'error')
-            return redirect(url_for('admin_login'))
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "admin_logged_in" not in session:
+            flash("Please login first", "error")
+            return redirect(url_for("admin_login"))
         return f(*args, **kwargs)
-    decorated_function.__name__ = f.__name__
-    return decorated_function
-
-
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-
-ALLOWED_EXTENSIONS_PDF = {"pdf"}
-ALLOWED_EXTENSIONS_IMG = {"png", "jpg", "jpeg", "gif", "svg"}
+    return wrapper
 
 
 # ---------------------------------------------------------------------------
-# Database (PostgreSQL via DATABASE_URL only)
+# DATABASE CONFIG
 # ---------------------------------------------------------------------------
 database_url = get_database_uri()
 
@@ -125,104 +104,72 @@ if database_url.startswith("postgres://"):
 
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_pre_ping": True,
-    "connect_args": {"sslmode": "require"}
-}
 
 db.init_app(app)
 migrate.init_app(app, db)
 
-import models  # noqa: E402
+import models  # noqa
 
-_AUTO_DB_CREATE = os.environ.get("AUTO_DB_CREATE", "").strip().lower() in {"1", "true", "yes"}
-if not os.environ.get("AUTO_DB_CREATE", "").strip():
-    _AUTO_DB_CREATE = True
 
-if _AUTO_DB_CREATE:
-    with app.app_context():
-        db.create_all()
-        from models import AboutContent, AboutIntro  # noqa: E402
-        if db.session.get(AboutContent, 1) is None:
-            db.session.add(AboutContent(id=1, preview_text="", details_text=""))
-        if db.session.get(AboutIntro, 1) is None:
-            db.session.add(AboutIntro(id=1, headline="", role_line="", short_desc="", about_image=""))
-        db.session.commit()
+with app.app_context():
+    db.create_all()
+
+
+# ---------------------------------------------------------------------------
+# FILE VALIDATION
+# ---------------------------------------------------------------------------
+ALLOWED_PDF = {"pdf"}
+ALLOWED_IMG = {"png", "jpg", "jpeg", "gif", "svg"}
 
 
 def allowed_file(filename, allowed_ext):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed_ext
 
 
-@app.context_processor
-def inject_static_version():
-    try:
-        css_path = os.path.join(app.static_folder, "css", "style.css")
-        anim_path = os.path.join(app.static_folder, "css", "animations.css")
-        js_path = os.path.join(app.static_folder, "js", "main.js")
-        mtimes = [os.path.getmtime(css_path), os.path.getmtime(js_path)]
-        if os.path.exists(anim_path):
-            mtimes.append(os.path.getmtime(anim_path))
-        v = int(max(mtimes))
-    except OSError:
-        v = 1
-    return {"static_v": v}
+def is_valid_url(value):
+    return isinstance(value, str) and value.startswith("http")
 
 
+# ---------------------------------------------------------------------------
+# CONTEXT PROCESSORS
+# ---------------------------------------------------------------------------
 @app.context_processor
 def inject_asset_url():
     def asset_url(value: str) -> str:
         if not value:
             return ""
         if value.startswith("http"):
-            return value
+            return value  # ✅ GitHub RAW + Cloudinary supported
         return ""
     return {"asset_url": asset_url}
 
 
+@app.context_processor
+def inject_static_version():
+    try:
+        css = os.path.join(app.static_folder, "css", "style.css")
+        js = os.path.join(app.static_folder, "js", "main.js")
+        v = int(max(os.path.getmtime(css), os.path.getmtime(js)))
+    except:
+        v = 1
+    return {"static_v": v}
+
+
 # ---------------------------------------------------------------------------
-# Data helpers
+# DATA HELPERS
 # ---------------------------------------------------------------------------
-
-def get_projects():
-    projects = []
-    for p in models.Project.query.order_by(models.Project.id.desc()).all():
-        images = [img.image_file or "" for img in (p.images or []) if img and img.image_file]
-        cover_image = (p.project_image or "").strip() or (images[0] if images else "")
-        projects.append(
-            {
-                "id": p.id,
-                "title": (p.title or "").strip(),
-                "description": (p.description or "").strip(),
-                "tech_stack": (p.tech_stack or "").strip(),
-                "github_link": (p.github_link or "").strip(),
-                "live_demo": (p.live_demo or "").strip(),
-                "cover_image": cover_image,
-                "images": images,
-            }
-        )
-    return projects
-
-
 def get_certifications():
-    rows = models.Certification.query.order_by(
-        models.Certification.year.desc(), models.Certification.id.desc()
-    ).all()
+    rows = models.Certification.query.order_by(models.Certification.id.desc()).all()
     return [(c.id, c.title, c.platform, c.year, c.certificate_file) for c in rows]
 
 
-def get_skills():
-    rows = models.Skill.query.order_by(models.Skill.id.asc()).all()
-    return [(s.id, s.skill_name) for s in rows]
-
-
 def get_experience():
-    rows = models.Experience.query.order_by(models.Experience.id.asc()).all()
+    rows = models.Experience.query.order_by(models.Experience.id.desc()).all()
     return [(e.id, e.role, e.organization, e.duration, e.description, e.experience_file) for e in rows]
 
 
 def get_profile():
-    row = models.Profile.query.order_by(models.Profile.id.asc()).first()
+    row = models.Profile.query.first()
     if not row:
         return None
     return (
@@ -231,837 +178,537 @@ def get_profile():
         row.resume_file, row.profile_image,
     )
 
-
-def get_about_content():
-    row = db.session.get(models.AboutContent, 1)
-    return {
-        "preview_text": row.preview_text if row and row.preview_text else "",
-        "details_text": row.details_text if row and row.details_text else "",
-    }
-
-
-def get_about_intro():
-    row = db.session.get(models.AboutIntro, 1)
-    return {
-        "headline":   row.headline   if row and row.headline   else "",
-        "role_line":  row.role_line  if row and row.role_line  else "",
-        "short_desc": row.short_desc if row and row.short_desc else "",
-        "about_image":row.about_image if row and row.about_image else "",
-    }
-
-
-def get_about_interests():
-    rows = models.AboutInterest.query.order_by(
-        models.AboutInterest.sort_order.asc(), models.AboutInterest.id.asc()
-    ).all()
-    return [(r.id, r.label, r.count_value) for r in rows]
-
-
-def get_highlights():
-    rows = models.Highlight.query.order_by(
-        models.Highlight.sort_order.asc(), models.Highlight.id.asc()
-    ).all()
-    return [(r.id, r.icon_key, r.title, r.description) for r in rows]
-
-
-def get_stats_counts():
-    return {
-        "projects":       models.Project.query.count(),
-        "skills":         models.Skill.query.count(),
-        "certifications": models.Certification.query.count(),
-    }
-
-
-def get_project_thumbnails():
-    rows = models.ProjectThumbnail.query.order_by(
-        models.ProjectThumbnail.sort_order.asc(), models.ProjectThumbnail.id.asc()
-    ).all()
-    return [{"id": r.id, "title": r.title or "", "image_file": r.image_file or ""} for r in rows]
-
-
-# ---------------------------------------------------------------------------
-# Public routes
+    # ---------------------------------------------------------------------------
+# PUBLIC ROUTES
 # ---------------------------------------------------------------------------
 
 @app.route("/")
-def home():
-    return render_template(
-        "home.html",
-        projects=get_projects(),
-        project_thumbnails=get_project_thumbnails(),
-        certifications=get_certifications(),
-        skills=get_skills(),
-        experience=get_experience(),
-        profile=get_profile(),
-        about_content=get_about_content(),
-        about_intro=get_about_intro(),
-        about_interests=get_about_interests(),
-        highlights=get_highlights(),
-        stats=get_stats_counts(),
-    )
+def index():
+    profile = get_profile()
+    certifications = get_certifications()
+    experience = get_experience()
+    projects = models.Project.query.order_by(models.Project.id.desc()).all()
 
-
-@app.route("/about")
-def about_page():
     return render_template(
-        "about.html",
-        profile=get_profile(),
-        about_content=get_about_content(),
-        about_intro=get_about_intro(),
-        about_interests=get_about_interests(),
-        highlights=get_highlights(),
-        stats=get_stats_counts(),
+        "index.html",
+        profile=profile,
+        certifications=certifications,
+        experience=experience,
+        projects=projects,
     )
 
 
 @app.route("/projects")
 def projects_page():
-    return render_template(
-        "projects.html",
-        projects=get_projects(),
-        profile=get_profile(),
-        about_content=get_about_content(),
-    )
-
-
-@app.route("/skills")
-def skills_page():
-    return render_template(
-        "skills.html",
-        skills=get_skills(),
-        profile=get_profile(),
-        about_content=get_about_content(),
-    )
-
-
-@app.route("/experience")
-def experience_page():
-    return render_template(
-        "experience.html",
-        experience=get_experience(),
-        profile=get_profile(),
-        about_content=get_about_content(),
-    )
-
-
-@app.route("/certifications")
-def certifications_page():
-    return render_template(
-        "certifications.html",
-        certifications=get_certifications(),
-        profile=get_profile(),
-        about_content=get_about_content(),
-    )
-
-
-@app.route("/contact", methods=["GET", "POST"])
-def contact_page():
-    profile = get_profile()
-    next_dest = request.args.get("next", "").strip().lower()
-
-    if request.method == "POST":
-        name    = request.form.get("name", "").strip()
-        email   = request.form.get("email", "").strip()
-        message = request.form.get("message", "").strip()
-
-        if not name or not email or not message:
-            flash("Please fill out all contact fields.", "error")
-            if next_dest == "home":
-                return redirect(url_for("home") + "#contact")
-            return redirect(url_for("contact_page"))
-
-        flash("Thanks for your message! I'll get back to you soon.", "success")
-        if next_dest == "home":
-            return redirect(url_for("home") + "#contact")
-        return redirect(url_for("contact_page"))
-
-    return render_template("contact.html", profile=profile)
+    projects = models.Project.query.order_by(models.Project.id.desc()).all()
+    return render_template("projects.html", projects=projects)
 
 
 # ---------------------------------------------------------------------------
-# Projects API
+# PROJECT API (FOR DYNAMIC FRONTEND)
 # ---------------------------------------------------------------------------
 
-def _api_file_url(value: str) -> str:
-    if not value:
-        return ""
-    if value.startswith("http"):
-        return value
-    return ""
+@app.route("/api/projects")
+def api_projects():
+    projects = models.Project.query.order_by(models.Project.id.desc()).all()
 
-
-@app.route("/api/projects", methods=["GET"])
-def api_projects_list():
-    projects = get_projects()
+    data = []
     for p in projects:
-        p["cover_image_url"] = _api_file_url(p.get("cover_image", ""))
-        p["image_urls"] = [_api_file_url(img) for img in (p.get("images") or [])]
-    return jsonify(projects)
+        data.append({
+            "id": p.id,
+            "title": p.title,
+            "description": p.description,
+            "tech_stack": p.tech_stack,
+            "github": p.github,
+            "live_demo": p.live_demo,
+            "image": p.image if is_valid_url(p.image) else ""
+        })
 
-
-@app.route("/api/projects", methods=["POST"])
-@login_required
-def api_projects_create():
-    payload = request.get_json(silent=True) or {}
-    title       = (payload.get("title") or "").strip()
-    description = (payload.get("description") or "").strip()
-    tech_stack  = (payload.get("tech_stack") or "").strip()
-    github_link = (payload.get("github_link") or "").strip()
-    live_demo   = (payload.get("live_demo") or "").strip()
-    cover_image = (payload.get("cover_image") or "").strip() or None
-
-    if not title or not description:
-        return jsonify({"error": "title and description are required"}), 400
-    if cover_image and not cover_image.startswith("http"):
-        return jsonify({"error": "cover_image must be a Cloud URL"}), 400
-
-    project = models.Project(
-        title=title, description=description, tech_stack=tech_stack,
-        github_link=github_link, project_image=cover_image, live_demo=live_demo,
-    )
-    db.session.add(project)
-    db.session.flush()
-
-    images = payload.get("images") or []
-    if isinstance(images, list):
-        for idx, img in enumerate(images[:6]):
-            img_val = (img or "").strip()
-            if img_val and not img_val.startswith("http"):
-                return jsonify({"error": "images must be Cloud URLs"}), 400
-            if img_val:
-                db.session.add(models.ProjectImage(project_id=project.id, image_file=img_val, sort_order=idx))
-
-    db.session.commit()
-    return jsonify({"id": project.id}), 201
-
-
-@app.route("/api/projects/<int:project_id>", methods=["PUT"])
-@login_required
-def api_projects_update(project_id: int):
-    project = db.session.get(models.Project, project_id)
-    if not project:
-        return jsonify({"error": "not found"}), 404
-
-    payload = request.get_json(silent=True) or {}
-    for field, attr in [
-        ("title", "title"), ("description", "description"),
-        ("tech_stack", "tech_stack"), ("github_link", "github_link"),
-        ("live_demo", "live_demo"), ("cover_image", "project_image"),
-    ]:
-        if field in payload:
-            cleaned = (payload.get(field) or "").strip() or None
-            if field == "cover_image" and cleaned and not cleaned.startswith("http"):
-                return jsonify({"error": "cover_image must be a Cloud URL"}), 400
-            setattr(project, attr, cleaned)
-
-    if "images" in payload and isinstance(payload.get("images"), list):
-        project.images = []
-        for idx, img in enumerate((payload.get("images") or [])[:6]):
-            img_val = (img or "").strip()
-            if img_val and not img_val.startswith("http"):
-                return jsonify({"error": "images must be Cloud URLs"}), 400
-            if img_val:
-                project.images.append(models.ProjectImage(image_file=img_val, sort_order=idx))
-
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/projects/<int:project_id>", methods=["DELETE"])
-@login_required
-def api_projects_delete(project_id: int):
-    project = db.session.get(models.Project, project_id)
-    if not project:
-        return jsonify({"error": "not found"}), 404
-
-    image_files = [img.image_file for img in (project.images or []) if img and img.image_file]
-    cover = (project.project_image or "").strip()
-    if cover and cover not in image_files:
-        image_files.append(cover)
-
-    db.session.delete(project)
-    db.session.commit()
-
-    for rel in image_files:
-        _cloudinary_delete(rel)
-
-    return jsonify({"ok": True})
+    return jsonify(data)
 
 
 # ---------------------------------------------------------------------------
-# Auth
+# CONTACT FORM
+# ---------------------------------------------------------------------------
+
+@app.route("/contact", methods=["POST"])
+def contact():
+    name = request.form.get("name", "").strip()
+    email = request.form.get("email", "").strip()
+    message = request.form.get("message", "").strip()
+
+    # Basic validation
+    if not name or not email or not message:
+        flash("All fields are required!", "error")
+        return redirect(url_for("index"))
+
+    if "@" not in email:
+        flash("Invalid email address!", "error")
+        return redirect(url_for("index"))
+
+    try:
+        contact_entry = models.Contact(
+            name=name,
+            email=email,
+            message=message
+        )
+        db.session.add(contact_entry)
+        db.session.commit()
+
+        flash("Message sent successfully!", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Contact form: {e}")
+        flash("Something went wrong. Try again.", "error")
+
+    return redirect(url_for("index"))
+
+
+# ---------------------------------------------------------------------------
+# STATIC FILE DEBUG ROUTE (OPTIONAL)
+# ---------------------------------------------------------------------------
+
+@app.route("/debug/files")
+@login_required
+def debug_files():
+    certs = get_certifications()
+    exps = get_experience()
+    profile = get_profile()
+
+    return jsonify({
+        "certifications": certs,
+        "experience": exps,
+        "resume": profile[7] if profile else None
+    })
+
+
+# ---------------------------------------------------------------------------
+# ERROR HANDLING
+# ---------------------------------------------------------------------------
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("404.html"), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template("500.html"), 500
+
+# ---------------------------------------------------------------------------
+# ADMIN AUTH ROUTES
 # ---------------------------------------------------------------------------
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
-    if 'admin_logged_in' in session:
-        return redirect(url_for('admin'))
-
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "").strip()
-        if username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, password):
-            session['admin_logged_in'] = True
-            flash("Logged in successfully!", "success")
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('admin'))
-        flash("Invalid username or password.", "error")
+        username = request.form.get("username")
+        password = request.form.get("password")
 
-    return render_template("admin_login.html")
+        if username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, password):
+            session["admin_logged_in"] = True
+            flash("Login successful!", "success")
+            return redirect(url_for("admin_dashboard"))
+        else:
+            flash("Invalid credentials!", "error")
+
+    return render_template("admin/login.html")
 
 
 @app.route("/admin/logout")
+@login_required
 def admin_logout():
-    session.pop('admin_logged_in', None)
+    session.pop("admin_logged_in", None)
     flash("Logged out successfully!", "success")
-    return redirect(url_for('home'))
+    return redirect(url_for("admin_login"))
 
 
 # ---------------------------------------------------------------------------
-# Admin dashboard
+# ADMIN DASHBOARD
 # ---------------------------------------------------------------------------
 
-@app.route("/admin")
+@app.route("/admin/dashboard")
 @login_required
-def admin():
-    return render_template(
-        "admin.html",
-        projects=get_projects(),
-        certifications=get_certifications(),
-        skills=get_skills(),
-        experience=get_experience(),
-        profile=get_profile(),
-        about_content=get_about_content(),
-        about_intro=get_about_intro(),
-        about_interests=get_about_interests(),
-        highlights=get_highlights(),
-    )
+def admin_dashboard():
+    return render_template("admin/dashboard.html")
 
 
 # ---------------------------------------------------------------------------
-# Admin — certifications
+# ADD CERTIFICATION
 # ---------------------------------------------------------------------------
 
-@app.route("/admin/certifications", methods=["GET", "POST"])
+@app.route("/admin/add-certification", methods=["POST"])
 @login_required
-def admin_certifications():
-    if request.method == "POST":
-        title    = request.form.get("title", "").strip()
-        platform = request.form.get("platform", "").strip()
-        year     = request.form.get("year", "").strip()
-        file     = request.files.get("certificate")
+def add_certification():
+    title = request.form.get("title")
+    platform = request.form.get("platform")
+    year = request.form.get("year")
+    file = request.files.get("certificate_file")
+    url = request.form.get("certificate_url")
 
-        if not title or not platform or not year or not file:
-            flash("All fields are required.", "error")
-            return redirect(url_for("admin_certifications"))
+    file_url = ""
 
-        if file and allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
-            stored_value = _cloudinary_upload(file, "portfolio/certificates", resource_type="raw")
-            db.session.add(models.Certification(
-                title=title, platform=platform, year=year, certificate_file=stored_value,
-            ))
-            db.session.commit()
-            flash("Certification added successfully!", "success")
-            return redirect(url_for("admin_certifications"))
+    # Priority: File upload > URL
+    if file and allowed_file(file.filename, ALLOWED_PDF):
+        file_url = upload_file(file, "certificates", resource_type="raw")
+    elif is_valid_url(url):
+        file_url = url
 
-        flash("Please upload a valid PDF file.", "error")
-        return redirect(url_for("admin_certifications"))
-
-    return render_template("admin_certifications.html", certifications=get_certifications())
-
-
-@app.route("/admin/certifications/<int:cert_id>/delete", methods=["POST"])
-@login_required
-def delete_certification(cert_id):
-    row = db.session.get(models.Certification, cert_id)
-    certificate_file = row.certificate_file if row else None
-    if row:
-        db.session.delete(row)
+    try:
+        cert = models.Certification(
+            title=title,
+            platform=platform,
+            year=year,
+            certificate_file=file_url
+        )
+        db.session.add(cert)
         db.session.commit()
-    if certificate_file:
-        _cloudinary_delete(certificate_file)
-    flash("Certification deleted.", "success")
-    return redirect(url_for("admin_certifications"))
+        flash("Certification added!", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(e)
+        flash("Error adding certification", "error")
+
+    return redirect(url_for("admin_dashboard"))
 
 
 # ---------------------------------------------------------------------------
-# Admin — projects
+# DELETE CERTIFICATION
 # ---------------------------------------------------------------------------
 
-@app.route("/admin/projects", methods=["GET", "POST"])
+@app.route("/admin/delete-certification/<int:id>")
 @login_required
-def admin_projects():
-    if request.method == "GET":
-        return redirect(url_for("admin"))
+def delete_certification(id):
+    cert = models.Certification.query.get_or_404(id)
 
-    title       = request.form.get("title", "").strip()
-    description = request.form.get("description", "").strip()
-    tech_stack  = request.form.get("tech_stack", "").strip()
-    github_link = request.form.get("github_link", "").strip()
-    live_demo   = request.form.get("live_demo", "").strip()
-    files       = request.files.getlist("project_images")
+    delete_file(cert.certificate_file)
 
-    if not title or not description:
-        flash("Title and description are required.", "error")
-        return redirect(url_for("admin"))
-
-    valid_files = [f for f in files if f and f.filename and allowed_file(f.filename, ALLOWED_EXTENSIONS_IMG)]
-
-    if len(valid_files) > 6:
-        flash("You can upload a maximum of 6 images per project.", "error")
-        return redirect(url_for("admin"))
-
-    project = models.Project(
-        title=title, description=description, tech_stack=tech_stack,
-        github_link=github_link, project_image=None, live_demo=live_demo,
-    )
-    db.session.add(project)
-    db.session.flush()
-
-    if valid_files:
-        saved = [_cloudinary_upload(f, f"portfolio/projects/project_{project.id}") for f in valid_files]
-        project.project_image = saved[0]
-        for idx, rel_path in enumerate(saved):
-            db.session.add(models.ProjectImage(project_id=project.id, image_file=rel_path, sort_order=idx))
-
+    db.session.delete(cert)
     db.session.commit()
-    flash("Project added successfully!", "success")
-    return redirect(url_for("admin"))
+
+    flash("Deleted successfully", "success")
+    return redirect(url_for("admin_dashboard"))
 
 
-@app.route("/admin/projects/manage")
+# ---------------------------------------------------------------------------
+# ADD EXPERIENCE
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/add-experience", methods=["POST"])
 @login_required
-def admin_projects_manage():
-    return render_template("admin_projects.html", projects=get_projects())
+def add_experience():
+    role = request.form.get("role")
+    organization = request.form.get("organization")
+    duration = request.form.get("duration")
+    description = request.form.get("description")
+
+    file = request.files.get("experience_file")
+    url = request.form.get("experience_url")
+
+    file_url = ""
+
+    if file and allowed_file(file.filename, ALLOWED_PDF):
+        file_url = upload_file(file, "experience", resource_type="raw")
+    elif is_valid_url(url):
+        file_url = url
+
+    try:
+        exp = models.Experience(
+            role=role,
+            organization=organization,
+            duration=duration,
+            description=description,
+            experience_file=file_url
+        )
+        db.session.add(exp)
+        db.session.commit()
+        flash("Experience added!", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(e)
+        flash("Error adding experience", "error")
+
+    return redirect(url_for("admin_dashboard"))
 
 
-@app.route("/admin/projects/<int:project_id>/delete", methods=["POST"])
+# ---------------------------------------------------------------------------
+# DELETE EXPERIENCE
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/delete-experience/<int:id>")
 @login_required
-def delete_project(project_id):
-    project = db.session.get(models.Project, project_id)
-    if not project:
-        flash("Project not found.", "error")
-        return redirect(url_for("admin_projects_manage"))
+def delete_experience(id):
+    exp = models.Experience.query.get_or_404(id)
 
-    image_files = [img.image_file for img in (project.images or []) if img and img.image_file]
-    cover = (project.project_image or "").strip()
-    if cover and cover not in image_files:
-        image_files.append(cover)
+    delete_file(exp.experience_file)
+
+    db.session.delete(exp)
+    db.session.commit()
+
+    flash("Deleted successfully", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+# ---------------------------------------------------------------------------
+# ADD PROJECT
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/add-project", methods=["POST"])
+@login_required
+def add_project():
+    title = request.form.get("title")
+    description = request.form.get("description")
+    tech_stack = request.form.get("tech_stack")
+    github = request.form.get("github")
+    live_demo = request.form.get("live_demo")
+
+    image = request.files.get("image")
+    image_url = request.form.get("image_url")
+
+    final_image = ""
+
+    if image and allowed_file(image.filename, ALLOWED_IMG):
+        final_image = upload_file(image, "projects")
+    elif is_valid_url(image_url):
+        final_image = image_url
+
+    try:
+        project = models.Project(
+            title=title,
+            description=description,
+            tech_stack=tech_stack,
+            github=github,
+            live_demo=live_demo,
+            image=final_image
+        )
+        db.session.add(project)
+        db.session.commit()
+        flash("Project added!", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(e)
+        flash("Error adding project", "error")
+
+    return redirect(url_for("admin_dashboard"))
+
+
+# ---------------------------------------------------------------------------
+# DELETE PROJECT
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/delete-project/<int:id>")
+@login_required
+def delete_project(id):
+    project = models.Project.query.get_or_404(id)
+
+    delete_file(project.image)
 
     db.session.delete(project)
     db.session.commit()
 
-    for rel in image_files:
-        _cloudinary_delete(rel)
-
-    flash("Project deleted.", "success")
-    return redirect(url_for("admin_projects_manage"))
+    flash("Deleted successfully", "success")
+    return redirect(url_for("admin_dashboard"))
 
 
 # ---------------------------------------------------------------------------
-# Admin — project thumbnails
+# UPDATE PROFILE (VERY IMPORTANT)
 # ---------------------------------------------------------------------------
 
-@app.route("/admin/project_thumbnails", methods=["POST"])
-@login_required
-def admin_project_thumbnails_add():
-    title      = request.form.get("title", "").strip()
-    file       = request.files.get("thumbnail_image")
-    sort_order = request.form.get("sort_order", "0").strip()
-
-    if not title:
-        flash("Thumbnail title is required.", "error")
-        return redirect(url_for("admin"))
-
-    if not file or not file.filename or not allowed_file(file.filename, ALLOWED_EXTENSIONS_IMG):
-        flash("Please upload a valid thumbnail image.", "error")
-        return redirect(url_for("admin"))
-
-    try:
-        sort_order_val = int(sort_order)
-    except ValueError:
-        sort_order_val = 0
-
-    stored_value = _cloudinary_upload(file, "portfolio/project_thumbnails")
-    db.session.add(models.ProjectThumbnail(title=title, image_file=stored_value, sort_order=sort_order_val))
-    db.session.commit()
-    flash("Project thumbnail added.", "success")
-    return redirect(url_for("admin"))
-
-
-@app.route("/admin/project_thumbnails/manage")
-@login_required
-def admin_project_thumbnails_manage():
-    return render_template("admin_project_thumbnails.html", thumbnails=get_project_thumbnails())
-
-
-@app.route("/admin/project_thumbnails/<int:thumb_id>/delete", methods=["POST"])
-@login_required
-def delete_project_thumbnail(thumb_id):
-    thumb = db.session.get(models.ProjectThumbnail, thumb_id)
-    img = (thumb.image_file if thumb else "") or ""
-    if thumb:
-        db.session.delete(thumb)
-        db.session.commit()
-    if img:
-        _cloudinary_delete(img)
-    flash("Thumbnail deleted.", "success")
-    return redirect(url_for("admin_project_thumbnails_manage"))
-
-
-# ---------------------------------------------------------------------------
-# Admin — skills
-# ---------------------------------------------------------------------------
-
-@app.route("/admin/skills", methods=["GET", "POST"])
-@login_required
-def admin_skills():
-    if request.method == "GET":
-        return redirect(url_for("admin_skills_manage"))
-
-    skill_name = request.form.get("skill_name", "").strip()
-    if not skill_name:
-        flash("Skill name is required.", "error")
-        return redirect(url_for("admin"))
-
-    db.session.add(models.Skill(skill_name=skill_name))
-    db.session.commit()
-    flash("Skill added successfully!", "success")
-    return redirect(url_for("admin"))
-
-
-@app.route("/admin/skills/manage")
-@login_required
-def admin_skills_manage():
-    return render_template("admin_skills.html", skills=get_skills())
-
-
-@app.route("/admin/skills/<int:skill_id>/delete", methods=["POST"])
-@login_required
-def delete_skill(skill_id):
-    row = db.session.get(models.Skill, skill_id)
-    if row:
-        db.session.delete(row)
-        db.session.commit()
-    flash("Skill deleted.", "success")
-    return redirect(url_for("admin_skills_manage"))
-
-
-# ---------------------------------------------------------------------------
-# Admin — experience
-# ---------------------------------------------------------------------------
-
-@app.route("/admin/experience", methods=["GET", "POST"])
-@login_required
-def admin_experience():
-    if request.method == "GET":
-        return redirect(url_for("admin_experience_manage"))
-
-    role         = request.form.get("role", "").strip()
-    organization = request.form.get("organization", "").strip()
-    duration     = request.form.get("duration", "").strip()
-    description  = request.form.get("description", "").strip()
-    file         = request.files.get("experience_file")
-
-    if not role or not organization or not duration or not description:
-        flash("All fields are required.", "error")
-        return redirect(url_for("admin"))
-
-    experience_filename = ""
-    if file and file.filename:
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
-            flash("Invalid file type. Please upload a PDF.", "error")
-            return redirect(url_for("admin"))
-        experience_filename = _cloudinary_upload(file, "portfolio/experience", resource_type="raw")
-
-    db.session.add(models.Experience(
-        role=role, organization=organization, duration=duration,
-        description=description, experience_file=experience_filename,
-    ))
-    db.session.commit()
-    flash("Experience added successfully!", "success")
-    return redirect(url_for("admin"))
-
-
-@app.route("/admin/experience/manage")
-@login_required
-def admin_experience_manage():
-    return render_template("admin_experience.html", experience=get_experience())
-
-
-@app.route("/admin/experience/<int:experience_id>/delete", methods=["POST"])
-@login_required
-def delete_experience(experience_id):
-    row = db.session.get(models.Experience, experience_id)
-    experience_file = row.experience_file if row else None
-    if row:
-        db.session.delete(row)
-        db.session.commit()
-    if experience_file:
-        _cloudinary_delete(experience_file)
-    flash("Experience deleted.", "success")
-    return redirect(url_for("admin_experience_manage"))
-
-
-# ---------------------------------------------------------------------------
-# Admin — profile
-# ---------------------------------------------------------------------------
-
-@app.route("/admin/profile", methods=["GET", "POST"])
-@login_required
-def admin_profile():
-    if request.method == "GET":
-        return redirect(url_for("update_profile"))
-
-    name     = request.form.get("name", "").strip()
-    title    = request.form.get("title", "").strip()
-    about    = request.form.get("about", "").strip()
-    email    = request.form.get("email", "").strip()
-    github   = request.form.get("github", "").strip()
-    linkedin = request.form.get("linkedin", "").strip()
-
-    if not name or not title or not about:
-        flash("Name, title, and about are required.", "error")
-        return redirect(url_for("admin"))
-
-    profile = db.session.get(models.Profile, 1)
-    if profile is None:
-        profile = models.Profile(id=1)
-        db.session.add(profile)
-
-    profile.name = name
-    profile.title = title
-    profile.about = about
-    profile.email = email
-    profile.github = github
-    profile.linkedin = linkedin
-    db.session.commit()
-    flash("Profile updated successfully!", "success")
-    return redirect(url_for("admin"))
-
-
-@app.route("/update_profile")
+@app.route("/admin/update-profile", methods=["POST"])
 @login_required
 def update_profile():
-    return render_template("update_profile.html", profile=get_profile())
+    profile = models.Profile.query.first()
 
+    if not profile:
+        profile = models.Profile()
 
-@app.route("/upload_resume", methods=["GET", "POST"])
-@login_required
-def upload_resume():
-    if request.method == "POST":
-        file = request.files.get("resume")
-        if not file or file.filename == "":
-            flash("No file selected.", "error")
-            return redirect(url_for("admin"))
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
-            flash("Invalid file type. Only PDF files are allowed.", "error")
-            return redirect(url_for("admin"))
+    profile.name = request.form.get("name")
+    profile.title = request.form.get("title")
+    profile.about = request.form.get("about")
+    profile.email = request.form.get("email")
+    profile.github = request.form.get("github")
+    profile.linkedin = request.form.get("linkedin")
 
-        stored_value = _cloudinary_upload(file, "portfolio/resume", resource_type="raw")
-        profile = db.session.get(models.Profile, 1)
-        if profile is None:
-            profile = models.Profile(id=1)
-            db.session.add(profile)
-        profile.resume_file = stored_value
-        db.session.commit()
-        flash("Resume uploaded successfully!", "success")
-        return redirect(url_for("admin"))
+    # Resume (PDF)
+    resume_file = request.files.get("resume_file")
+    resume_url = request.form.get("resume_url")
 
-    return render_template("upload_resume.html", profile=get_profile())
+    if resume_file and allowed_file(resume_file.filename, ALLOWED_PDF):
+        profile.resume_file = upload_file(resume_file, "resume", resource_type="raw")
+    elif is_valid_url(resume_url):
+        profile.resume_file = resume_url
 
+    # Profile Image
+    image_file = request.files.get("profile_image")
+    image_url = request.form.get("profile_image_url")
 
-@app.route("/upload_profile_image", methods=["GET", "POST"])
-@login_required
-def upload_profile_image():
-    if request.method == "POST":
-        file = request.files.get("profile_image")
-        if not file or file.filename == "":
-            flash("No file selected.", "error")
-            return redirect(url_for("admin"))
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS_IMG):
-            flash("Invalid file type. Only image files are allowed.", "error")
-            return redirect(url_for("admin"))
-
-        profile = db.session.get(models.Profile, 1)
-        old_image = (profile.profile_image if profile else "") or ""
-        if old_image:
-            _cloudinary_delete(old_image)
-
-        stored_value = _cloudinary_upload(file, "portfolio/profile")
-        if profile is None:
-            profile = models.Profile(id=1)
-            db.session.add(profile)
-        profile.profile_image = stored_value
-        db.session.commit()
-        flash("Profile image uploaded successfully!", "success")
-        return redirect(url_for("admin"))
-
-    return render_template("upload_profile_image.html")
-
-
-# ---------------------------------------------------------------------------
-# Admin — about
-# ---------------------------------------------------------------------------
-
-@app.route("/admin/about", methods=["POST"])
-@login_required
-def admin_about():
-    preview_text = request.form.get("preview_text", "").strip()
-    details_text = request.form.get("details_text", "").strip()
-
-    row = db.session.get(models.AboutContent, 1)
-    if row is None:
-        row = models.AboutContent(id=1, preview_text="", details_text="")
-        db.session.add(row)
-    row.preview_text = preview_text
-    row.details_text = details_text
-    db.session.commit()
-    flash("About content updated.", "success")
-    return redirect(url_for("admin"))
-
-
-@app.route("/admin/about_intro", methods=["POST"])
-@login_required
-def admin_about_intro():
-    headline   = request.form.get("headline", "").strip()
-    role_line  = request.form.get("role_line", "").strip()
-    short_desc = request.form.get("short_desc", "").strip()
-
-    row = db.session.get(models.AboutIntro, 1)
-    if row is None:
-        row = models.AboutIntro(id=1, headline="", role_line="", short_desc="", about_image="")
-        db.session.add(row)
-    row.headline = headline
-    row.role_line = role_line
-    row.short_desc = short_desc
-    db.session.commit()
-    flash("About intro updated.", "success")
-    return redirect(url_for("admin"))
-
-
-@app.route("/admin/about_image", methods=["POST"])
-@login_required
-def admin_about_image():
-    file = request.files.get("about_image")
-    if not file or not file.filename:
-        flash("Please choose an image to upload.", "error")
-        return redirect(url_for("admin"))
-    if not allowed_file(file.filename, ALLOWED_EXTENSIONS_IMG):
-        flash("Please upload a valid image file (png/jpg/jpeg/gif/svg).", "error")
-        return redirect(url_for("admin"))
-
-    stored_value = _cloudinary_upload(file, "portfolio/about")
-
-    row = db.session.get(models.AboutIntro, 1)
-    if row is None:
-        row = models.AboutIntro(id=1, headline="", role_line="", short_desc="", about_image="")
-        db.session.add(row)
-    row.about_image = stored_value
-
-    for p in models.Project.query.filter(models.Project.project_image.isnot(None)).all():
-        cover = (p.project_image or "").strip()
-        if not cover:
-            continue
-        exists = any((img.image_file or "") == cover for img in (p.images or []))
-        if not exists:
-            db.session.add(models.ProjectImage(project_id=p.id, image_file=cover, sort_order=0))
-
-    db.session.commit()
-    flash("About section image updated.", "success")
-    return redirect(url_for("admin"))
-
-
-# ---------------------------------------------------------------------------
-# Admin — interests
-# ---------------------------------------------------------------------------
-
-@app.route("/admin/interests", methods=["POST"])
-@login_required
-def admin_interests_add():
-    label       = request.form.get("label", "").strip()
-    count_value = request.form.get("count_value", "0").strip()
-    sort_order  = request.form.get("sort_order", "0").strip()
-
-    if not label:
-        flash("Interest label is required.", "error")
-        return redirect(url_for("admin"))
+    if image_file and allowed_file(image_file.filename, ALLOWED_IMG):
+        profile.profile_image = upload_file(image_file, "profile")
+    elif is_valid_url(image_url):
+        profile.profile_image = image_url
 
     try:
-        count_value_int = int(count_value)
-    except ValueError:
-        count_value_int = 0
-    try:
-        sort_order_int = int(sort_order)
-    except ValueError:
-        sort_order_int = 0
-
-    db.session.add(models.AboutInterest(label=label, count_value=count_value_int, sort_order=sort_order_int))
-    db.session.commit()
-    flash("Interest added.", "success")
-    return redirect(url_for("admin"))
-
-
-@app.route("/admin/interests/<int:interest_id>/delete", methods=["POST"])
-@login_required
-def delete_interest(interest_id):
-    row = db.session.get(models.AboutInterest, interest_id)
-    if row:
-        db.session.delete(row)
+        db.session.add(profile)
         db.session.commit()
-    flash("Interest deleted.", "success")
-    return redirect(url_for("admin"))
+        flash("Profile updated!", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(e)
+        flash("Error updating profile", "error")
 
+    return redirect(url_for("admin_dashboard"))
 
 # ---------------------------------------------------------------------------
-# Admin — highlights
+# UPDATE CERTIFICATION
 # ---------------------------------------------------------------------------
 
-@app.route("/admin/highlights", methods=["POST"])
+@app.route("/admin/edit-certification/<int:id>", methods=["POST"])
 @login_required
-def admin_highlights():
-    icon_key    = request.form.get("icon_key", "").strip()
-    title       = request.form.get("title", "").strip()
-    description = request.form.get("description", "").strip()
-    sort_order  = request.form.get("sort_order", "0").strip()
+def edit_certification(id):
+    cert = models.Certification.query.get_or_404(id)
 
-    if not title or not description:
-        flash("Highlight title and description are required.", "error")
-        return redirect(url_for("admin"))
+    cert.title = request.form.get("title")
+    cert.platform = request.form.get("platform")
+    cert.year = request.form.get("year")
+
+    file = request.files.get("certificate_file")
+    url = request.form.get("certificate_url")
+
+    if file and allowed_file(file.filename, ALLOWED_PDF):
+        delete_file(cert.certificate_file)
+        cert.certificate_file = upload_file(file, "certificates", resource_type="raw")
+    elif is_valid_url(url):
+        cert.certificate_file = url
 
     try:
-        sort_order_int = int(sort_order)
-    except ValueError:
-        sort_order_int = 0
-
-    db.session.add(models.Highlight(
-        icon_key=icon_key, title=title, description=description, sort_order=sort_order_int,
-    ))
-    db.session.commit()
-    flash("Highlight added.", "success")
-    return redirect(url_for("admin"))
-
-
-@app.route("/admin/highlights/<int:highlight_id>/delete", methods=["POST"])
-@login_required
-def delete_highlight(highlight_id):
-    row = db.session.get(models.Highlight, highlight_id)
-    if row:
-        db.session.delete(row)
         db.session.commit()
-    flash("Highlight deleted.", "success")
-    return redirect(url_for("admin"))
+        flash("Certification updated!", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(e)
+        flash("Error updating certification", "error")
+
+    return redirect(url_for("admin_dashboard"))
 
 
 # ---------------------------------------------------------------------------
-# Legacy / disabled
+# UPDATE EXPERIENCE
 # ---------------------------------------------------------------------------
 
-@app.route("/uploads/<path:_path>")
-def uploads_disabled(_path: str):
-    abort(410)
+@app.route("/admin/edit-experience/<int:id>", methods=["POST"])
+@login_required
+def edit_experience(id):
+    exp = models.Experience.query.get_or_404(id)
 
+    exp.role = request.form.get("role")
+    exp.organization = request.form.get("organization")
+    exp.duration = request.form.get("duration")
+    exp.description = request.form.get("description")
+
+    file = request.files.get("experience_file")
+    url = request.form.get("experience_url")
+
+    if file and allowed_file(file.filename, ALLOWED_PDF):
+        delete_file(exp.experience_file)
+        exp.experience_file = upload_file(file, "experience", resource_type="raw")
+    elif is_valid_url(url):
+        exp.experience_file = url
+
+    try:
+        db.session.commit()
+        flash("Experience updated!", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(e)
+        flash("Error updating experience", "error")
+
+    return redirect(url_for("admin_dashboard"))
+
+
+# ---------------------------------------------------------------------------
+# UPDATE PROJECT
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/edit-project/<int:id>", methods=["POST"])
+@login_required
+def edit_project(id):
+    project = models.Project.query.get_or_404(id)
+
+    project.title = request.form.get("title")
+    project.description = request.form.get("description")
+    project.tech_stack = request.form.get("tech_stack")
+    project.github = request.form.get("github")
+    project.live_demo = request.form.get("live_demo")
+
+    image = request.files.get("image")
+    image_url = request.form.get("image_url")
+
+    if image and allowed_file(image.filename, ALLOWED_IMG):
+        delete_file(project.image)
+        project.image = upload_file(image, "projects")
+    elif is_valid_url(image_url):
+        project.image = image_url
+
+    try:
+        db.session.commit()
+        flash("Project updated!", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(e)
+        flash("Error updating project", "error")
+
+    return redirect(url_for("admin_dashboard"))
+
+
+# ---------------------------------------------------------------------------
+# OPTIONAL: SEARCH PROJECTS (READY TO USE)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/search-projects")
+def search_projects():
+    query = request.args.get("q", "").strip()
+
+    if not query:
+        return jsonify([])
+
+    projects = models.Project.query.filter(
+        models.Project.title.ilike(f"%{query}%")
+    ).all()
+
+    data = [{
+        "id": p.id,
+        "title": p.title,
+        "description": p.description
+    } for p in projects]
+
+    return jsonify(data)
+
+
+# ---------------------------------------------------------------------------
+# OPTIONAL: PAGINATION (FUTURE READY)
+# ---------------------------------------------------------------------------
+
+@app.route("/projects/page/<int:page>")
+def paginated_projects(page):
+    per_page = 6
+
+    pagination = models.Project.query.paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
+
+    return render_template(
+        "projects.html",
+        projects=pagination.items,
+        pagination=pagination
+    )
+
+
+# ---------------------------------------------------------------------------
+# FINAL ENTRY POINT
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=True)
+    app.run(debug=True)
