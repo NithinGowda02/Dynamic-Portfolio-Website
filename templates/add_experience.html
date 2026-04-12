@@ -75,7 +75,7 @@
                             <p class="experience-card__desc">{{ exp[4] }}</p>
                             {% if exp|length > 5 and exp[5] %}
                             <div class="form__actions">
-                                <a href="{{ asset_url(exp[5]) | replace('/upload/', '/upload/fl_inline/f_pdf/') }}" 
+                                <a href="{{ asset_url(exp[5]) }}" 
                                     target="_blank" 
                                     rel="noopener"
                                     class="btn btn--secondary btn--small">

@@ -37,14 +37,14 @@
         {% if profile and profile[8] %}
         <div class="form__actions" style="margin-top: 20px;">
             
-            <!-- View Resume (opens in browser) -->
+            <!-- View Resume -->
             <a href="{{ asset_url(profile[8]) }}" target="_blank"
                class="btn btn--secondary">
                View Resume
             </a>
 
             <!-- Download Resume -->
-            <a href="{{ asset_url(profile[8]) | replace('/fl_inline/', '/') }}" download
+            <a href="{{ asset_url(profile[8]) }}" download
                class="btn btn--ghost">
                Download Resume
             </a>

@@ -37,7 +37,11 @@ The real home page template is: templates/home.html
     </nav>
 
     <div class="navbar__actions">
-        <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" download>Resume</a>
+        <a href="{{ url_for('static', filename='resume.pdf') }}" 
+            class="btn btn--primary" 
+            target="_blank">
+            Resume
+        </a>
         {% if session.get('admin_logged_in') %}
         <a href="{{ url_for('admin') }}" class="btn btn--secondary">Admin</a>
         {% else %}
@@ -245,10 +249,11 @@ The real home page template is: templates/home.html
                             Built backend automation tools and APIs using Python. Gained hands-on experience in software
                             architecture, database design, and deploying production-ready applications.
                         </p>
-                        <a href="{{ asset_url(exp[5]) | replace('/upload/', '/upload/fl_inline/') }}" 
-                            target="_blank"
+                        <a href="{{ asset_url(exp[5]) }}" 
+                            target="_blank" 
+                            rel="noopener"
                             class="btn btn--secondary btn--small">
-                            View Certificate
+                            View Attachment
                         </a>
                     </article>
 
@@ -262,10 +267,11 @@ The real home page template is: templates/home.html
                             Developed a classification model using natural language processing and Python to detect
                             fake news. Implemented data pipelines, feature engineering, and model evaluation.
                         </p>
-                        <a href="{{ asset_url(cert[4]) | replace('/upload/', '/upload/fl_inline/') }}" 
-                            target="_blank"
+                        <a href="{{ asset_url(exp[5]) }}" 
+                            target="_blank" 
+                            rel="noopener"
                             class="btn btn--secondary btn--small">
-                            View Certificate
+                            View Attachment
                         </a>
                     </article>
                     {% endif %}
@@ -290,7 +296,7 @@ The real home page template is: templates/home.html
                         <span class="cert-card__platform">{{ cert[2] }}</span>
                     </div>
                     <p class="cert-card__year">{{ cert[3] }}</p>
-                    <a href="{{ asset_url(cert[4]) | replace('/upload/', '/upload/fl_inline/') }}" 
+                    <a href="{{ asset_url(cert[4]) }}" 
                         target="_blank"
                         class="btn btn--secondary btn--small">
                         View Certificate
