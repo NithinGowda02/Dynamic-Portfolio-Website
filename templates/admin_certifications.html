@@ -1,137 +1,121 @@
-<!DOCTYPE html>
-<html lang="en">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Admin • Certifications</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
-</head>
+{% block content %}
+<section class="dashboard-grid">
 
-<body>
+    <article class="module module--span-2">
+        <header class="module__header">
+            <h2 class="module__title">Upload Certificate</h2>
+            <p class="module__subtitle">Add a new certification to the public portfolio.</p>
+        </header>
 
-{# ── Safe Cloudinary inline-URL macro ────────────────────────────────────────
-   FIX: Replaces the fragile  | replace('/upload/', '/upload/fl_inline/')
-   pattern used throughout this file. See inline comments for details.
-────────────────────────────────────────────────────────────────────────────── #}
-{% macro inline_url(raw) -%}
-  {%- if raw and raw != 'None' -%}
-    {%- set full = asset_url(raw) if not raw.startswith('http') else raw -%}
-    {%- if '/upload/' in full -%}
-      {{ full | replace('/upload/', '/upload/fl_inline,q_auto,f_auto/', 1) }}
-    {%- else -%}
-      {{ full }}
-    {%- endif -%}
-  {%- else -%}
-    #
-  {%- endif -%}
-{%- endmacro %}
-
-    <header class="navbar">
-        <div class="navbar__brand">
-            <a href="/" class="brand__link">
-                <span class="brand__logo">N</span>
-                <span class="brand__name">Nithin.dev</span>
-            </a>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="alert-grid">
+            {% for category, message in messages %}
+            <div class="alert alert--{{ category }}">{{ message }}</div>
+            {% endfor %}
         </div>
-        <div class="navbar__actions">
-            <a href="/" class="btn btn--ghost">Back to Portfolio</a>
-        </div>
-    </header>
+        {% endif %}
+        {% endwith %}
 
-    <main>
-        <section class="dashboard-grid">
-            <article class="module module--span-2">
-                <header class="module__header">
-                    <h2 class="module__title">Upload Certificate</h2>
-                    <p class="module__subtitle">Add a new certification to the public portfolio.</p>
-                </header>
+        <form class="form"
+              action="{{ url_for('admin_certifications') }}"
+              method="post"
+              enctype="multipart/form-data">
+            <label class="form__label">
+                <span>Certification Title</span>
+                <input class="form__input" type="text" name="title"
+                       placeholder="e.g., Python Programming Certification" required>
+            </label>
+            <label class="form__label">
+                <span>Platform / Organization</span>
+                <input class="form__input" type="text" name="platform"
+                       placeholder="e.g., Coursera" required>
+            </label>
+            <label class="form__label">
+                <span>Year</span>
+                <input class="form__input" type="text" name="year"
+                       placeholder="e.g., 2025" required>
+            </label>
+            <label class="form__label">
+                <span>Certificate PDF</span>
+                <input class="form__input" type="file" name="certificate"
+                       accept="application/pdf" required>
+            </label>
+            <button type="submit" class="btn btn--primary">Upload Certification</button>
+        </form>
+    </article>
 
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                <div class="alert-grid">
-                    {% for category, message in messages %}
-                    <div class="alert alert--{{ category }}">{{ message }}</div>
-                    {% endfor %}
+    <article class="module module--span-2">
+        <header class="module__header">
+            <h2 class="module__title">Current Certifications</h2>
+            <p class="module__subtitle">Uploaded certificates will appear here.</p>
+        </header>
+
+        <div class="certifications__grid">
+            {% if certifications %}
+            {% for cert in certifications %}
+            <article class="cert-card">
+                <div class="cert-card__meta">
+                    <h3 class="cert-card__title">{{ cert[1] }}</h3>
+                    <span class="cert-card__platform">{{ cert[2] }}</span>
                 </div>
-                {% endif %}
-                {% endwith %}
+                <p class="cert-card__year">{{ cert[3] }}</p>
 
-                <form class="form" action="{{ url_for('admin_certifications') }}" method="post" enctype="multipart/form-data">
-                    <label class="form__label">
-                        <span>Certification Title</span>
-                        <input class="form__input" type="text" name="title" required />
-                    </label>
-
-                    <label class="form__label">
-                        <span>Platform / Organization</span>
-                        <input class="form__input" type="text" name="platform" required />
-                    </label>
-
-                    <label class="form__label">
-                        <span>Year</span>
-                        <input class="form__input" type="text" name="year" placeholder="2025" required />
-                    </label>
-
-                    <label class="form__label">
-                        <span>Certificate PDF</span>
-                        <input class="form__input" type="file" name="certificate" accept="application/pdf" required />
-                    </label>
-
-                    <button type="submit" class="btn btn--primary">Upload Certification</button>
-                </form>
-            </article>
-
-            <article class="module module--span-2">
-                <header class="module__header">
-                    <h2 class="module__title">Current Certifications</h2>
-                    <p class="module__subtitle">Uploaded certificates will appear here.</p>
-                </header>
-
-                <div class="certifications__grid">
-                    {% if certifications %}
-                    {% for cert in certifications %}
-                    <article class="cert-card">
-                        <div class="cert-card__meta">
-                            <h3 class="cert-card__title">{{ cert[1] }}</h3>
-                            <span class="cert-card__platform">{{ cert[2] }}</span>
-                        </div>
-                        <p class="cert-card__year">{{ cert[3] }}</p>
-                        <div class="form__actions">
-                            {# FIX: use macro — safe null-check + replace-limit=1 + valid flag syntax #}
-                            {% set cert_href = inline_url(cert[4]) %}
-                            {% if cert_href != '#' %}
-                            <a href="{{ cert_href }}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="btn btn--secondary btn--small">
-                                View Certificate
-                            </a>
-                            {% else %}
-                            <span class="btn btn--secondary btn--small" style="opacity:0.4;cursor:default;">Not Available</span>
-                            {% endif %}
-
-                            <form action="{{ url_for('delete_certification', cert_id=cert[0]) }}" method="post">
-                                <button type="submit" class="btn btn--ghost btn--small"
-                                    onclick="return confirm('Delete this certification?');">Delete</button>
-                            </form>
-                        </div>
-                    </article>
-                    {% endfor %}
+                <div class="form__actions">
+                    {% set cert_href = asset_url(cert[4]) if cert[4] else '' %}
+                    {% if cert_href %}
+                    <a href="{{ cert_href }}"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="btn btn--secondary btn--small cert-view-btn">
+                        View Certificate
+                    </a>
                     {% else %}
-                    <div class="empty-state">
-                        <p class="empty-state__text">No certifications have been uploaded yet.</p>
-                    </div>
+                    <span class="btn btn--secondary btn--small"
+                          style="opacity:0.4;cursor:default;"
+                          title="No certificate file uploaded">
+                        Not Available
+                    </span>
                     {% endif %}
+
+                    <form action="{{ url_for('delete_certification', cert_id=cert[0]) }}"
+                          method="post"
+                          style="display:inline">
+                        <button type="submit"
+                                class="btn btn--ghost btn--small"
+                                onclick="return confirm('Delete \'{{ cert[1] }}\'?')">
+                            Delete
+                        </button>
+                    </form>
                 </div>
             </article>
-        </section>
-    </main>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <p class="empty-state__text">No certifications uploaded yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </article>
 
-    <footer class="footer">
-        <p class="footer__copy">© 2026 Nithin.dev — Admin</p>
-    </footer>
-</body>
+</section>
 
-</html>
+<script>
+document.querySelectorAll('.cert-view-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var orig = btn.textContent.trim();
+        btn.textContent = 'Loading\u2026';
+        btn.style.opacity = '0.6';
+        btn.style.pointerEvents = 'none';
+        setTimeout(function () {
+            btn.textContent = orig;
+            btn.style.opacity = '';
+            btn.style.pointerEvents = '';
+        }, 3000);
+    });
+});
+</script>
+
+{% endblock %}

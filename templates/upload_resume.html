@@ -1,38 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Upload Resume - Admin</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
-</head>
-<body>
+{% extends "base.html" %}
 
-{# ── Safe Cloudinary inline-URL macro ────────────────────────────────────────
-   FIX: old code used  asset_url(profile[7]) | replace('/upload/', '/upload/fl_inline/f_pdf/')
-   Same two bugs as other templates:
-     1. '/fl_inline/f_pdf/' is invalid — flags MUST be comma-separated in one
-        transformation step: fl_inline,q_auto,f_auto
-     2. Unlimited replace() → double-patches already-transformed URLs.
-   The Download link is left as a plain asset_url() call (no fl_inline) so
-   the browser triggers a file-save dialog instead of opening in a tab.
-────────────────────────────────────────────────────────────────────────────── #}
-{% macro inline_url(raw) -%}
-  {%- if raw and raw != 'None' -%}
-    {%- set full = asset_url(raw) if not raw.startswith('http') else raw -%}
-    {%- if '/upload/' in full -%}
-      {{ full | replace('/upload/', '/upload/fl_inline,q_auto,f_auto/', 1) }}
-    {%- else -%}
-      {{ full }}
-    {%- endif -%}
-  {%- else -%}
-    #
-  {%- endif -%}
-{%- endmacro %}
-
-    <div class="container">
-        <h1>Upload Resume</h1>
+{% block content %}
+<section class="dashboard-grid">
+    <article class="module module--span-2">
+        <header class="module__header">
+            <h2 class="module__title">Upload Resume</h2>
+            <p class="module__subtitle">Replace your current resume PDF.</p>
+        </header>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -44,50 +18,40 @@
         {% endif %}
         {% endwith %}
 
-        <!-- Upload Form -->
-        <form method="POST" enctype="multipart/form-data" class="form">
+        <form method="POST"
+              enctype="multipart/form-data"
+              class="form"
+              action="{{ url_for('upload_resume') }}">
             <label class="form__label">
                 <span>Resume PDF</span>
-                <input type="file" class="form__input" name="resume" accept="application/pdf" required>
+                <input type="file" class="form__input" name="resume"
+                       accept="application/pdf" required>
             </label>
-
-            <div class="form__actions">
-                <button type="submit" class="btn btn--primary">Upload Resume</button>
-            </div>
+            <button type="submit" class="btn btn--primary">Upload Resume</button>
         </form>
 
-        <!-- Show Resume actions if a resume exists -->
         {% if profile and profile[7] %}
-        <div class="form__actions" style="margin-top: 20px;">
-
-            {# FIX: View uses inline_url macro so the PDF opens in the browser tab
-               instead of triggering a download (fl_inline tells Cloudinary to
-               set Content-Disposition: inline).  Download keeps the raw asset_url
-               so the browser's native save-dialog fires correctly. #}
-            {% set resume_view = inline_url(profile[7]) %}
-            {% if resume_view != '#' %}
-            <a href="{{ resume_view }}"
+        {% set resume_url = asset_url(profile[7]) if profile[7] else '' %}
+        {% if resume_url %}
+        <div class="form__actions" style="margin-top:20px">
+            <a href="{{ resume_url }}"
                target="_blank"
                rel="noopener noreferrer"
                class="btn btn--secondary">
-               View Resume
+                View Resume
             </a>
-            {% endif %}
-
-            <a href="{{ asset_url(profile[7]) }}"
+            <a href="{{ resume_url }}"
                download
                class="btn btn--ghost">
-               Download Resume
+                Download Resume
             </a>
         </div>
         {% endif %}
+        {% endif %}
 
-        <br>
-        <a href="{{ url_for('admin') }}" class="btn">Back to Admin</a>
-    </div>
-
-    <footer class="footer">
-        <p class="footer__copy">© 2026 Nithin.dev — Admin</p>
-    </footer>
-</body>
-</html>
+        <div style="margin-top:20px">
+            <a href="{{ url_for('admin') }}" class="btn btn--ghost">Back to Admin</a>
+        </div>
+    </article>
+</section>
+{% endblock %}

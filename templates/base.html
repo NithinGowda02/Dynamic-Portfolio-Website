@@ -31,11 +31,11 @@
 
             {% if profile and profile[7] %}
             <li class="nav__item nav__item--mobile-only">
-                <a href="{{ asset_url(profile[7]) }}" class="nav__link" download>Resume</a>
+                <a href="{{ asset_url(profile[7]) }}" class="nav__link" target="_blank" rel="noopener noreferrer">Resume</a>
             </li>
             {% else %}
             <li class="nav__item nav__item--mobile-only">
-                <a href="{{ url_for('static', filename='resume.pdf') }}" class="nav__link" download>Resume</a>
+                <a href="{{ url_for('static', filename='resume.pdf') }}" class="nav__link" target="_blank" rel="noopener noreferrer">Resume</a>
             </li>
             {% endif %}
 
@@ -49,9 +49,9 @@
 
     <div class="navbar__actions">
         {% if profile and profile[7] %}
-        <a href="{{ asset_url(profile[7]) }}" class="btn btn--primary" download>Resume</a>
+        <a href="{{ asset_url(profile[7]) }}" class="btn btn--primary" target="_blank" rel="noopener noreferrer">Resume</a>
         {% else %}
-        <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" download>Resume</a>
+        <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" target="_blank" rel="noopener noreferrer">Resume</a>
         {% endif %}
         {% if session.get('admin_logged_in') %}
         <a href="{{ url_for('admin') }}" class="btn btn--secondary">Admin</a>
@@ -113,14 +113,14 @@
                     {% endif %}
 
                     {% if profile and profile[7] %}
-                    <a class="footer__iconlink" href="{{ asset_url(profile[7]) }}" download aria-label="Download Resume">
+                    <a class="footer__iconlink" href="{{ asset_url(profile[7]) }}" target="_blank" rel="noopener noreferrer" aria-label="View Resume">
                         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
                             <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18-5.5 5.5 1.42 1.42L11 6.84V16h2V6.84l3.08 3.08 1.42-1.42L12 2z" />
                         </svg>
                         <span class="sr-only">Resume</span>
                     </a>
                     {% else %}
-                    <a class="footer__iconlink" href="{{ url_for('static', filename='resume.pdf') }}" download aria-label="Download Resume">
+                    <a class="footer__iconlink" href="{{ url_for('static', filename='resume.pdf') }}" target="_blank" rel="noopener noreferrer" aria-label="View Resume">
                         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
                             <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18-5.5 5.5 1.42 1.42L11 6.84V16h2V6.84l3.08 3.08 1.42-1.42L12 2z" />
                         </svg>
