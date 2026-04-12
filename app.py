@@ -40,17 +40,21 @@ def _require_cloudinary() -> None:
 
 
 def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> str:
-    """Upload *file_obj* to Cloudinary and return the secure URL."""
     _require_cloudinary()
+
     result = cloudinary.uploader.upload(
         file_obj,
         folder=folder,
-        resource_type=resource_type,
+        resource_type="raw",   
+        use_filename=True,
+        unique_filename=False,
         overwrite=True,
     )
+
     url = (result or {}).get("secure_url")
     if not url:
-        raise RuntimeError("Cloudinary upload succeeded but no secure_url was returned.")
+        raise RuntimeError("Cloudinary upload failed: no secure_url")
+
     return url
 
 

@@ -249,9 +249,8 @@ The real home page template is: templates/home.html
                             Built backend automation tools and APIs using Python. Gained hands-on experience in software
                             architecture, database design, and deploying production-ready applications.
                         </p>
-                        <a href="{{ asset_url(exp[5]) }}" 
+                        <a href="{{ asset_url(exp[5]) | replace('/upload/', '/upload/fl_inline/') }}" 
                             target="_blank" 
-                            rel="noopener"
                             class="btn btn--secondary btn--small">
                             View Attachment
                         </a>
@@ -267,9 +266,8 @@ The real home page template is: templates/home.html
                             Developed a classification model using natural language processing and Python to detect
                             fake news. Implemented data pipelines, feature engineering, and model evaluation.
                         </p>
-                        <a href="{{ asset_url(exp[5]) }}" 
+                        <a href="{{ asset_url(exp[5]) | replace('/upload/', '/upload/fl_inline/') }}" 
                             target="_blank" 
-                            rel="noopener"
                             class="btn btn--secondary btn--small">
                             View Attachment
                         </a>
@@ -296,7 +294,7 @@ The real home page template is: templates/home.html
                         <span class="cert-card__platform">{{ cert[2] }}</span>
                     </div>
                     <p class="cert-card__year">{{ cert[3] }}</p>
-                    <a href="{{ asset_url(cert[4]) }}" 
+                    <a href="{{ asset_url(cert[4]) | replace('/upload/', '/upload/fl_inline/') }}" 
                         target="_blank"
                         class="btn btn--secondary btn--small">
                         View Certificate

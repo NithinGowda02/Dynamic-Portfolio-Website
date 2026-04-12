@@ -34,17 +34,19 @@
         </form>
 
         <!-- Show Resume if exists -->
-        {% if profile and profile[8] %}
+        {% if profile and profile[7] %}
         <div class="form__actions" style="margin-top: 20px;">
             
             <!-- View Resume -->
-            <a href="{{ asset_url(profile[8]) }}" target="_blank"
+            <a href="{{ asset_url(profile[7]) | replace('/upload/', '/upload/fl_inline/f_pdf/') }}" 
+               target="_blank"
                class="btn btn--secondary">
                View Resume
             </a>
 
             <!-- Download Resume -->
-            <a href="{{ asset_url(profile[8]) }}" download
+            <a href="{{ asset_url(profile[7]) }}" 
+               download
                class="btn btn--ghost">
                Download Resume
             </a>
