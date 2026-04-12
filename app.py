@@ -118,9 +118,20 @@ ALLOWED_EXTENSIONS_IMG = {"png", "jpg", "jpeg", "gif", "svg"}
 # ---------------------------------------------------------------------------
 # Database (PostgreSQL via DATABASE_URL only)
 # ---------------------------------------------------------------------------
-app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri()
+database_url = get_database_uri()
+
+# Fix for Render PostgreSQL
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
+
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping": True,
+    "connect_args": {"sslmode": "require"}
+}
+
 db.init_app(app)
 migrate.init_app(app, db)
 
