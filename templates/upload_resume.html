@@ -10,6 +10,7 @@
 <body>
     <div class="container">
         <h1>Upload Resume</h1>
+
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         <div class="alert-grid">
@@ -19,15 +20,38 @@
         </div>
         {% endif %}
         {% endwith %}
+
+        <!-- Upload Form -->
         <form method="POST" enctype="multipart/form-data" class="form">
             <label class="form__label">
                 <span>Resume PDF</span>
                 <input type="file" class="form__input" name="resume" accept="application/pdf" required>
             </label>
+
             <div class="form__actions">
-                <button type="submit" class="btn">Upload Resume</button>
+                <button type="submit" class="btn btn--primary">Upload Resume</button>
             </div>
         </form>
+
+        <!-- Show Resume if exists -->
+        {% if profile and profile[8] %}
+        <div class="form__actions" style="margin-top: 20px;">
+            
+            <!-- View Resume (opens in browser) -->
+            <a href="{{ asset_url(profile[8]) }}" target="_blank"
+               class="btn btn--secondary">
+               View Resume
+            </a>
+
+            <!-- Download Resume -->
+            <a href="{{ asset_url(profile[8]) | replace('/fl_inline/', '/') }}" download
+               class="btn btn--ghost">
+               Download Resume
+            </a>
+        </div>
+        {% endif %}
+
+        <br>
         <a href="{{ url_for('admin') }}" class="btn">Back to Admin</a>
     </div>
 

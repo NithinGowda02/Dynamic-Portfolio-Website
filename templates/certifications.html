@@ -17,8 +17,10 @@
                     <span class="cert-card__platform">{{ cert[2] }}</span>
                 </div>
                 <p class="cert-card__year">{{ cert[3] }}</p>
-                <a href="{{ asset_url(cert[4]) }}" target="_blank"
-                    class="btn btn--secondary btn--small">
+
+                <a href="{{ asset_url(cert[4]) | replace('/upload/', '/upload/fl_inline/') }}" 
+                target="_blank"
+                class="btn btn--secondary btn--small">
                     View Certificate
                 </a>
             </article>
