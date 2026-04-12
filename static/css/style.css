@@ -661,6 +661,20 @@ main {
     letter-spacing: 0.01em;
     transition: transform var(--transition), box-shadow var(--transition), border var(--transition);
 }
+.cert-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.btn--download {
+    background-color: #16a34a;
+    color: white;
+}
+
+.btn--download:hover {
+    background-color: #166534;
+}
 
 .skill-badge:hover {
     transform: translateY(-3px);
