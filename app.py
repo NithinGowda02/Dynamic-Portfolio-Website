@@ -52,22 +52,15 @@ def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> st
     url = (result or {}).get("secure_url")
     if not url:
         raise RuntimeError("Cloudinary upload failed: no secure_url")
-    return {
-    "url": result["secure_url"],
-    "public_id": result["public_id"],
-    "resource_type": result["resource_type"]
-}
-
+    return url  # return plain URL string, not a dict
 
 def _cloudinary_delete(url_or_public_id: str) -> None:
     if not _CLOUDINARY_ENABLED or not url_or_public_id:
         return
 
     try:
-        # If already public_id (recommended storage)
         public_id = url_or_public_id
 
-        # If full URL, extract public_id safely
         if url_or_public_id.startswith("http"):
             import re
             match = re.search(r"/upload/(?:v\d+/)?(.+?)(?:\.[a-zA-Z0-9]+)?$", url_or_public_id)
@@ -79,7 +72,6 @@ def _cloudinary_delete(url_or_public_id: str) -> None:
 
     except Exception as exc:
         print(f"[WARN] Cloudinary delete failed: {exc}")
-
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET", "dev-secret")
 
