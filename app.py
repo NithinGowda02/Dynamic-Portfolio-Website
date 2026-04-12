@@ -54,6 +54,7 @@ def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> st
         raise RuntimeError("Cloudinary upload failed: no secure_url")
     return url
 
+
 def _cloudinary_delete(url_or_path: str) -> None:
     """Best-effort delete from Cloudinary given a stored URL or public_id."""
     if not _CLOUDINARY_ENABLED or not url_or_path:
@@ -542,43 +543,33 @@ def admin():
 # ---------------------------------------------------------------------------
 
 @app.route("/admin/certifications", methods=["GET", "POST"])
+@login_required
 def admin_certifications():
     if request.method == "POST":
-
-        title = request.form.get("title", "").strip()
+        title    = request.form.get("title", "").strip()
         platform = request.form.get("platform", "").strip()
-        year = request.form.get("year", "").strip()
-        file = request.files.get("certificate")
+        year     = request.form.get("year", "").strip()
+        file     = request.files.get("certificate")
+
         if not title or not platform or not year or not file:
             flash("All fields are required.", "error")
             return redirect(url_for("admin_certifications"))
 
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
-            flash("Please upload a valid PDF file.", "error")
+        if file and allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
+            stored_value = _cloudinary_upload(file, "portfolio/certificates", resource_type="raw")
+            db.session.add(models.Certification(
+                title=title, platform=platform, year=year, certificate_file=stored_value,
+            ))
+            db.session.commit()
+            flash("Certification added successfully!", "success")
             return redirect(url_for("admin_certifications"))
 
-        result = _cloudinary_upload(
-            file,
-            "portfolio/certificates",
-            resource_type="raw"
-        )
-        db.session.add(models.Certification(
-            title=title,
-            platform=platform,
-            year=year,
-            certificate_file=result["url"],     # display URL
-            public_id=result["public_id"]       # for delete/update
-        ))
-
-        db.session.commit()
-
-        flash("Certification added successfully!", "success")
+        flash("Please upload a valid PDF file.", "error")
         return redirect(url_for("admin_certifications"))
 
-    return render_template(
-        "admin_certifications.html",
-        certifications=get_certifications()
-    )
+    return render_template("admin_certifications.html", certifications=get_certifications())
+
+
 @app.route("/admin/certifications/<int:cert_id>/delete", methods=["POST"])
 @login_required
 def delete_certification(cert_id):
@@ -780,13 +771,9 @@ def admin_experience():
     if file and file.filename:
         if not allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
             flash("Invalid file type. Please upload a PDF.", "error")
-            return redirect(url_for("admin")) 
-        file.stream.seek(0)
-        experience_filename = _cloudinary_upload(
-            file,
-            "portfolio/experience",
-            resource_type="raw"
-        )
+            return redirect(url_for("admin"))
+        experience_filename = _cloudinary_upload(file, "portfolio/experience", resource_type="raw")
+
     db.session.add(models.Experience(
         role=role, organization=organization, duration=duration,
         description=description, experience_file=experience_filename,
@@ -864,73 +851,54 @@ def update_profile():
 def upload_resume():
     if request.method == "POST":
         file = request.files.get("resume")
-
         if not file or file.filename == "":
             flash("No file selected.", "error")
             return redirect(url_for("admin"))
-
         if not allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
             flash("Invalid file type. Only PDF files are allowed.", "error")
             return redirect(url_for("admin"))
 
-        file.stream.seek(0)
-
-        stored_value = _cloudinary_upload(
-            file,
-            "portfolio/resume",
-            resource_type="raw"
-        )
-
+        stored_value = _cloudinary_upload(file, "portfolio/resume", resource_type="raw")
         profile = db.session.get(models.Profile, 1)
         if profile is None:
             profile = models.Profile(id=1)
             db.session.add(profile)
-
         profile.resume_file = stored_value
         db.session.commit()
-
         flash("Resume uploaded successfully!", "success")
         return redirect(url_for("admin"))
 
     return render_template("upload_resume.html", profile=get_profile())
+
 
 @app.route("/upload_profile_image", methods=["GET", "POST"])
 @login_required
-def upload_resume():
+def upload_profile_image():
     if request.method == "POST":
-        file = request.files.get("resume")
-
+        file = request.files.get("profile_image")
         if not file or file.filename == "":
             flash("No file selected.", "error")
             return redirect(url_for("admin"))
-
-        if not allowed_file(file.filename, ALLOWED_EXTENSIONS_PDF):
-            flash("Invalid file type. Only PDF files are allowed.", "error")
+        if not allowed_file(file.filename, ALLOWED_EXTENSIONS_IMG):
+            flash("Invalid file type. Only image files are allowed.", "error")
             return redirect(url_for("admin"))
 
-        file.stream.seek(0)
-
-        result = _cloudinary_upload(
-            file,
-            "portfolio/resume",
-            resource_type="raw"
-        )
-
         profile = db.session.get(models.Profile, 1)
+        old_image = (profile.profile_image if profile else "") or ""
+        if old_image:
+            _cloudinary_delete(old_image)
+
+        stored_value = _cloudinary_upload(file, "portfolio/profile")
         if profile is None:
             profile = models.Profile(id=1)
             db.session.add(profile)
-        profile.resume_file = result["url"]
-
-        # (OPTIONAL BUT HIGHLY RECOMMENDED)
-        profile.resume_public_id = result["public_id"]
-
+        profile.profile_image = stored_value
         db.session.commit()
-
-        flash("Resume uploaded successfully!", "success")
+        flash("Profile image uploaded successfully!", "success")
         return redirect(url_for("admin"))
 
-    return render_template("upload_resume.html", profile=get_profile())
+    return render_template("upload_profile_image.html")
+
 
 # ---------------------------------------------------------------------------
 # Admin — about
