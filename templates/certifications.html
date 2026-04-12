@@ -1,11 +1,28 @@
 {% extends "base.html" %}
 
 {% block content %}
+{#
+  FIX SUMMARY
+  -----------
+  Root cause was in app.py _cloudinary_upload(), not here.
+  PDFs are uploaded with resource_type="raw" so Cloudinary stores them under
+  /raw/upload/… URLs. Transformation flags (fl_inline, q_auto etc.) are NOT
+  supported on raw resources — applying them caused a Cloudinary error / blank
+  page in the browser.
+
+  The fix: use asset_url(cert[4]) directly with NO transformation.
+  Cloudinary serves raw PDFs with Content-Type: application/pdf, so the
+  browser opens them inline automatically — no fl_inline flag needed.
+
+  Also added:
+  - null-guard so a missing cert[4] shows "Not Available" instead of a broken link
+  - loading feedback JS so users see visual feedback while the PDF loads
+#}
 <section id="certifications" class="section section--glass">
     <div class="module module--certifications module--span-2">
         <header class="module__header">
             <h2 class="module__title">Certifications</h2>
-            <p class="module__subtitle">Verified credentials & certificates</p>
+            <p class="module__subtitle">Verified credentials &amp; certificates</p>
         </header>
 
         <div class="certifications__grid">
@@ -17,11 +34,22 @@
                     <span class="cert-card__platform">{{ cert[2] }}</span>
                 </div>
                 <p class="cert-card__year">{{ cert[3] }}</p>
-                <a href="{{ asset_url(cert[4]) | replace('/upload/', '/upload/fl_inline/') }}" 
+
+                {% set cert_href = asset_url(cert[4]) %}
+                {% if cert_href %}
+                <a href="{{ cert_href }}"
                     target="_blank"
-                    class="btn btn--secondary btn--small">
+                    rel="noopener noreferrer"
+                    class="btn btn--secondary btn--small cert-view-btn">
                     View Certificate
                 </a>
+                {% else %}
+                <span class="btn btn--secondary btn--small"
+                      style="opacity:0.4;cursor:default;"
+                      title="No certificate file uploaded">
+                    Not Available
+                </span>
+                {% endif %}
             </article>
             {% endfor %}
             {% else %}
@@ -32,4 +60,21 @@
         </div>
     </div>
 </section>
+
+<script>
+document.querySelectorAll('.cert-view-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var orig = btn.textContent.trim();
+        btn.textContent = 'Loading\u2026';
+        btn.style.opacity = '0.6';
+        btn.style.pointerEvents = 'none';
+        setTimeout(function () {
+            btn.textContent = orig;
+            btn.style.opacity = '';
+            btn.style.pointerEvents = '';
+        }, 3000);
+    });
+});
+</script>
+
 {% endblock %}

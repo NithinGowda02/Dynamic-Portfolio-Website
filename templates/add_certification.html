@@ -8,6 +8,24 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
 </head>
 <body>
+{#
+  FIX SUMMARY
+  -----------
+  Root cause was in app.py _cloudinary_upload(), not here.
+  PDFs are uploaded with resource_type="raw". Raw Cloudinary resources are stored
+  under /raw/upload/… and do NOT support transformation flags.
+  The old  | replace('/upload/', '/upload/fl_inline/')  tried to apply an image
+  transformation to a raw resource → Cloudinary returned an error / blank page.
+
+  Fix: use asset_url(cert[4]) directly with NO transformation.
+  Cloudinary serves raw PDFs with Content-Type: application/pdf so browsers
+  open them inline on their own — no fl_inline flag is needed.
+
+  Also fixed:
+  - Stray orphan </a> tag on the original line 76 (broken HTML)
+  - Added {% if certifications %} guard so an empty DB result shows empty-state
+    instead of silently erroring on the bare for-loop
+#}
     <header class="navbar">
         <div class="navbar__brand">
             <a href="/" class="brand__link">
@@ -61,6 +79,7 @@
                 <div class="module__body">
                     <h3>Current Certifications</h3>
                     <div class="certifications__grid">
+                        {% if certifications %}
                         {% for cert in certifications %}
                         <article class="cert-card">
                             <div class="cert-card__meta">
@@ -68,14 +87,29 @@
                                 <span class="cert-card__platform">{{ cert[2] }}</span>
                             </div>
                             <p class="cert-card__year">{{ cert[3] }}</p>
-                            <a href="{{ asset_url(cert[4]) | replace('/upload/', '/upload/fl_inline/') }}" 
+
+                            {% set cert_href = asset_url(cert[4]) %}
+                            {% if cert_href %}
+                            <a href="{{ cert_href }}"
                                 target="_blank"
-                                class="btn btn--secondary btn--small">
+                                rel="noopener noreferrer"
+                                class="btn btn--secondary btn--small cert-view-btn">
                                 View Certificate
                             </a>
-                            </a>
+                            {% else %}
+                            <span class="btn btn--secondary btn--small"
+                                  style="opacity:0.4;cursor:default;"
+                                  title="No certificate file uploaded">
+                                Not Available
+                            </span>
+                            {% endif %}
                         </article>
                         {% endfor %}
+                        {% else %}
+                        <div class="empty-state">
+                            <p class="empty-state__text">No certifications added yet.</p>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </article>
@@ -85,5 +119,21 @@
     <footer class="footer">
         <p class="footer__copy">© 2026 Nithin.dev — Add Certification</p>
     </footer>
+
+    <script>
+    document.querySelectorAll('.cert-view-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var orig = btn.textContent.trim();
+            btn.textContent = 'Loading\u2026';
+            btn.style.opacity = '0.6';
+            btn.style.pointerEvents = 'none';
+            setTimeout(function () {
+                btn.textContent = orig;
+                btn.style.opacity = '';
+                btn.style.pointerEvents = '';
+            }, 3000);
+        });
+    });
+    </script>
 </body>
 </html>

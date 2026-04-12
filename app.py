@@ -42,10 +42,29 @@ def _require_cloudinary() -> None:
 def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> str:
     _require_cloudinary()
 
+    # -----------------------------------------------------------------------
+    # FIX: was hardcoded to resource_type="raw" which ignored the parameter.
+    #
+    # Why this broke everything:
+    #   - PDFs (certificates, experience, resume) uploaded as "raw" are stored
+    #     under /raw/upload/… Cloudinary URLs.  Transformation flags like
+    #     fl_inline DO NOT work on raw resources, so "View Certificate" opened
+    #     a blank / error page in the browser.
+    #   - Images (profile, projects, about) also landed as "raw", meaning they
+    #     were served as file downloads instead of rendering in <img> tags.
+    #
+    # Fix: pass through the resource_type argument so callers control the type:
+    #   - PDFs  → resource_type="raw"  (caller already passes this explicitly)
+    #   - Images → resource_type="auto" (default; Cloudinary detects image type)
+    #
+    # Template change: raw PDFs no longer need fl_inline in the URL.
+    # Cloudinary serves raw files with the correct Content-Type (application/pdf)
+    # so browsers open them inline automatically — no transformation needed.
+    # -----------------------------------------------------------------------
     result = cloudinary.uploader.upload(
         file_obj,
         folder=folder,
-        resource_type="raw",   
+        resource_type=resource_type,  # FIX: was hardcoded "raw"
         use_filename=True,
         unique_filename=False,
         overwrite=True,
@@ -168,7 +187,6 @@ def allowed_file(filename, allowed_ext):
 def inject_static_version():
     """
     Cache-bust static assets so browsers pick up CSS/JS changes immediately.
-    This helps when you edit the footer but the browser keeps an old cached stylesheet.
     """
     try:
         css_path = os.path.join(app.static_folder, "css", "style.css")
@@ -450,7 +468,6 @@ def api_projects_update(project_id: int):
             setattr(project, attr, cleaned)
 
     if "images" in payload and isinstance(payload.get("images"), list):
-        # Replace image list (max 6).
         project.images = []
         for idx, img in enumerate((payload.get("images") or [])[:6]):
             img_val = (img or "").strip()
@@ -578,7 +595,6 @@ def contact_page():
                 return redirect(url_for("home") + "#contact")
             return redirect(url_for("contact_page"))
 
-        # Replace this with email sending or database storage as needed.
         flash("Thanks for your message! I'll get back to you soon.", "success")
         if next_dest == "home":
             return redirect(url_for("home") + "#contact")
@@ -663,8 +679,6 @@ def add_certification():
 @login_required
 def admin_projects():
     if request.method == "GET":
-        # This endpoint is used by the "Add Project" form on /admin.
-        # If someone opens it directly, avoid a confusing 405 page.
         return redirect(url_for("admin"))
 
     title = request.form.get("title", "").strip()
@@ -678,7 +692,6 @@ def admin_projects():
         flash("Title and description are required.", "error")
         return redirect(url_for("admin"))
 
-    # Validate and cap uploads (max 6 images per project).
     valid_files = []
     for f in files:
         if not f or not f.filename:
@@ -691,7 +704,6 @@ def admin_projects():
         flash("You can upload a maximum of 6 images per project.", "error")
         return redirect(url_for("admin"))
 
-    # Insert project first to get an ID for folder structure.
     project = models.Project(
         title=title,
         description=description,
@@ -708,6 +720,9 @@ def admin_projects():
         project_folder_name = f"project_{project_id}"
         saved = []
         for f in valid_files:
+            # FIX: images now upload as resource_type="auto" (default) instead
+            # of the old hardcoded "raw", so they are stored as image/* resources
+            # and render correctly in <img> tags throughout the portfolio.
             saved.append(_cloudinary_upload(f, f"portfolio/projects/{project_folder_name}"))
 
         cover = saved[0]
@@ -745,7 +760,6 @@ def delete_project(project_id):
     db.session.delete(project)
     db.session.commit()
 
-    # Delete from Cloudinary if URLs are stored
     for rel in image_files:
         _cloudinary_delete(rel)
 
@@ -773,6 +787,7 @@ def admin_project_thumbnails_add():
     except ValueError:
         sort_order_val = 0
 
+    # FIX: no resource_type passed → uses default "auto" → stored as image resource
     stored_value = _cloudinary_upload(file, "portfolio/project_thumbnails")
 
     db.session.add(
@@ -815,7 +830,6 @@ def delete_project_thumbnail(thumb_id):
 @login_required
 def admin_skills():
     if request.method == "GET":
-        # Send users to the dedicated manage page (includes delete UI).
         return redirect(url_for("admin_skills_manage"))
 
     skill_name = request.form.get("skill_name", "").strip()
@@ -862,7 +876,6 @@ def add_skill():
 @login_required
 def admin_experience():
     if request.method == "GET":
-        # Send users to the dedicated manage page (includes delete UI).
         return redirect(url_for("admin_experience_manage"))
 
     role = request.form.get("role", "").strip()
@@ -949,7 +962,6 @@ def add_experience():
 @login_required
 def admin_profile():
     if request.method == "GET":
-        # Avoid a 405 if opened directly; the full editor is here.
         return redirect(url_for("update_profile"))
 
     name = request.form.get("name", "").strip()
@@ -1030,6 +1042,7 @@ def admin_about_image():
         flash("Please upload a valid image file (png/jpg/jpeg/gif/svg).", "error")
         return redirect(url_for("admin"))
 
+    # FIX: no resource_type → uses default "auto" → stored as image resource
     stored_value = _cloudinary_upload(file, "portfolio/about")
 
     row = db.session.get(models.AboutIntro, 1)
@@ -1038,7 +1051,6 @@ def admin_about_image():
         db.session.add(row)
     row.about_image = stored_value
 
-    # Backfill: if an older project has a single cover image, ensure it exists in project_images too.
     for p in models.Project.query.filter(models.Project.project_image.isnot(None)).all():
         cover = (p.project_image or "").strip()
         if not cover:
@@ -1218,7 +1230,8 @@ def upload_resume():
         flash("Resume uploaded successfully!", "success")
         return redirect(url_for("admin"))
 
-    return render_template("upload_resume.html")
+    profile = get_profile()
+    return render_template("upload_resume.html", profile=profile)
 
 
 @app.route("/upload_profile_image", methods=["GET", "POST"])
@@ -1238,12 +1251,12 @@ def upload_profile_image():
             flash("Invalid file type. Only image files are allowed.", "error")
             return redirect(url_for("admin"))
 
-        # Remove old profile image if exists
         profile = db.session.get(models.Profile, 1)
         old_image = (profile.profile_image if profile else "") or ""
         if old_image:
             _cloudinary_delete(old_image)
 
+        # FIX: no resource_type → uses default "auto" → stored as image resource
         stored_value = _cloudinary_upload(file, "portfolio/profile")
 
         if profile is None:
@@ -1258,9 +1271,6 @@ def upload_profile_image():
     return render_template("upload_profile_image.html")
 
 
-
-
-
 @app.route("/uploads/<path:_path>")
 def uploads_disabled(_path: str):
     # Legacy URL path from older versions. Local filesystem storage is no longer supported.
@@ -1268,6 +1278,5 @@ def uploads_disabled(_path: str):
 
 
 if __name__ == "__main__":
-    # Enable the reloader in development so templates/routes stay in sync.
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=True, use_reloader=True)

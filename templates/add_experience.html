@@ -8,6 +8,26 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
 </head>
 <body>
+
+{# ── Safe Cloudinary inline-URL macro ────────────────────────────────────────
+   FIX: old code used  asset_url(exp[5]) | replace('/upload/', '/upload/fl_inline/f_pdf/')
+   '/fl_inline/f_pdf/' is INVALID — Cloudinary flags in separate path steps are
+   not recognised. The correct syntax is comma-separated: fl_inline,f_auto
+   Also added null-guard and replace-limit=1 to prevent double-patching.
+────────────────────────────────────────────────────────────────────────────── #}
+{% macro inline_url(raw) -%}
+  {%- if raw and raw != 'None' -%}
+    {%- set full = asset_url(raw) if not raw.startswith('http') else raw -%}
+    {%- if '/upload/' in full -%}
+      {{ full | replace('/upload/', '/upload/fl_inline,q_auto,f_auto/', 1) }}
+    {%- else -%}
+      {{ full }}
+    {%- endif -%}
+  {%- else -%}
+    #
+  {%- endif -%}
+{%- endmacro %}
+
     <header class="navbar">
         <div class="navbar__brand">
             <a href="/" class="brand__link">
@@ -74,14 +94,17 @@
                             <p class="experience-card__duration">{{ exp[3] }}</p>
                             <p class="experience-card__desc">{{ exp[4] }}</p>
                             {% if exp|length > 5 and exp[5] %}
+                            {% set attach_href = inline_url(exp[5]) %}
+                            {% if attach_href != '#' %}
                             <div class="form__actions">
-                                <a href="{{ asset_url(exp[5]) | replace('/upload/', '/upload/fl_inline/f_pdf/') }}" 
+                                <a href="{{ attach_href }}"
                                     target="_blank"
-                                    rel="noopener"
+                                    rel="noopener noreferrer"
                                     class="btn btn--secondary btn--small">
                                     View Attachment
                                 </a>
                             </div>
+                            {% endif %}
                             {% endif %}
                         </article>
                         {% endfor %}

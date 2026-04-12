@@ -8,6 +8,29 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
 </head>
 <body>
+
+{# ── Safe Cloudinary inline-URL macro ────────────────────────────────────────
+   FIX: old code used  asset_url(profile[7]) | replace('/upload/', '/upload/fl_inline/f_pdf/')
+   Same two bugs as other templates:
+     1. '/fl_inline/f_pdf/' is invalid — flags MUST be comma-separated in one
+        transformation step: fl_inline,q_auto,f_auto
+     2. Unlimited replace() → double-patches already-transformed URLs.
+   The Download link is left as a plain asset_url() call (no fl_inline) so
+   the browser triggers a file-save dialog instead of opening in a tab.
+────────────────────────────────────────────────────────────────────────────── #}
+{% macro inline_url(raw) -%}
+  {%- if raw and raw != 'None' -%}
+    {%- set full = asset_url(raw) if not raw.startswith('http') else raw -%}
+    {%- if '/upload/' in full -%}
+      {{ full | replace('/upload/', '/upload/fl_inline,q_auto,f_auto/', 1) }}
+    {%- else -%}
+      {{ full }}
+    {%- endif -%}
+  {%- else -%}
+    #
+  {%- endif -%}
+{%- endmacro %}
+
     <div class="container">
         <h1>Upload Resume</h1>
 
@@ -33,19 +56,25 @@
             </div>
         </form>
 
-        <!-- Show Resume if exists -->
+        <!-- Show Resume actions if a resume exists -->
         {% if profile and profile[7] %}
         <div class="form__actions" style="margin-top: 20px;">
-            
-            <!-- View Resume -->
-            <a href="{{ asset_url(profile[7]) | replace('/upload/', '/upload/fl_inline/f_pdf/') }}" 
+
+            {# FIX: View uses inline_url macro so the PDF opens in the browser tab
+               instead of triggering a download (fl_inline tells Cloudinary to
+               set Content-Disposition: inline).  Download keeps the raw asset_url
+               so the browser's native save-dialog fires correctly. #}
+            {% set resume_view = inline_url(profile[7]) %}
+            {% if resume_view != '#' %}
+            <a href="{{ resume_view }}"
                target="_blank"
+               rel="noopener noreferrer"
                class="btn btn--secondary">
                View Resume
             </a>
+            {% endif %}
 
-            <!-- Download Resume -->
-            <a href="{{ asset_url(profile[7]) }}" 
+            <a href="{{ asset_url(profile[7]) }}"
                download
                class="btn btn--ghost">
                Download Resume
