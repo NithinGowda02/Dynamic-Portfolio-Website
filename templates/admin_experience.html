@@ -70,12 +70,12 @@
                 <p class="experience-card__desc">{{ exp[4] }}</p>
 
                 <div class="form__actions">
-                    {% set exp_href = asset_url(exp[5]) if exp[5] else '' %}
-                    {% if exp_href %}
+                    {% if exp[5] %}
+                    {% set exp_href = exp[5] %}
                     <a href="{{ exp_href }}"
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       class="btn btn--secondary btn--small">
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="btn btn--secondary btn--small">
                         View Attachment
                     </a>
                     {% endif %}

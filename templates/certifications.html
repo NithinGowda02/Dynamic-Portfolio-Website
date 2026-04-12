@@ -35,7 +35,7 @@
                 </div>
                 <p class="cert-card__year">{{ cert[3] }}</p>
 
-                {% set cert_href = asset_url(cert[4]) %}
+                {% set cert_href = cert[4] %}
                 {% if cert_href %}
                 <a href="{{ cert_href }}"
                     target="_blank"

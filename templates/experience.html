@@ -21,13 +21,13 @@
                     <p class="experience-card__desc">{{ exp[4] }}</p>
 
                     {% if exp|length > 5 and exp[5] %}
-                    {% set attach_href = asset_url(exp[5]) if exp[5] else '' %}
+                    {% set attach_href = exp[5] %}
                     {% if attach_href %}
                     <div class="form__actions">
                         <a href="{{ attach_href }}"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           class="btn btn--secondary btn--small">
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="btn btn--secondary btn--small">
                             View Attachment
                         </a>
                     </div>

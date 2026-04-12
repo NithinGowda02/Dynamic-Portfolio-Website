@@ -64,18 +64,13 @@
                 <p class="cert-card__year">{{ cert[3] }}</p>
 
                 <div class="form__actions">
-                    {% set cert_href = asset_url(cert[4]) if cert[4] else '' %}
+                    {% set cert_href = cert[4] %}
                     {% if cert_href %}
-                    <a href="{{ cert_href }}"
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       class="btn btn--secondary btn--small cert-view-btn">
+                    <a href="{{ cert_href }}" target="_blank" class="btn btn--secondary btn--small">
                         View Certificate
                     </a>
                     {% else %}
-                    <span class="btn btn--secondary btn--small"
-                          style="opacity:0.4;cursor:default;"
-                          title="No certificate file uploaded">
+                    <span class="btn btn--secondary btn--small" style="opacity:0.4;">
                         Not Available
                     </span>
                     {% endif %}

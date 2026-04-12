@@ -46,8 +46,8 @@ def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> st
         folder=folder,
         resource_type=resource_type,
         use_filename=True,
-        unique_filename=False,
-        overwrite=True,
+        unique_filename=True,
+        overwrite=False,
     )
     url = (result or {}).get("secure_url")
     if not url:
