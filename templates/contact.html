@@ -40,9 +40,10 @@
         {% if profile %}
         <div class="contact__links">
             {% if profile[4] %}
-            <a href="https://mail.google.com/mail/?view=cm&fs=1&to=nithinkp368@gmail.com" 
+            <a href="https://mail.google.com/mail/u/0/#inbox?compose=new&to={{ profile[4] }}" 
             class="btn btn--secondary" 
-            target="_blank">
+            target="_blank"
+            rel="noopener noreferrer">
             Email Me
             </a>
             {% endif %}
