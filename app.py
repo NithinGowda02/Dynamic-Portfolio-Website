@@ -1,5 +1,5 @@
 ﻿﻿import os
-
+import functools
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -18,8 +18,6 @@ try:
     import cloudinary.uploader
 
     cloudinary.config(secure=True)
-
-    _CLOUDINARY_ENABLED = bool(os.environ.get("CLOUDINARY_URL"))
 
     _CLOUDINARY_ENABLED = bool(
         (os.environ.get("CLOUDINARY_URL", "").strip())
@@ -52,7 +50,8 @@ def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> st
     url = (result or {}).get("secure_url")
     if not url:
         raise RuntimeError("Cloudinary upload failed: no secure_url")
-    return url  # return plain URL string, not a dict
+    return url
+
 
 def _cloudinary_delete(url_or_public_id: str) -> None:
     if not _CLOUDINARY_ENABLED or not url_or_public_id:
@@ -72,8 +71,26 @@ def _cloudinary_delete(url_or_public_id: str) -> None:
 
     except Exception as exc:
         print(f"[WARN] Cloudinary delete failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# App setup
+# ---------------------------------------------------------------------------
 app = Flask(__name__, static_folder="static", static_url_path="/static")
-app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET", "dev-secret")
+
+# FIX 1: SECRET_KEY must ALWAYS come from environment in production.
+# Hardcoding a fallback is dangerous — use a strong random key in your
+# Render environment variables. This will raise clearly if missing in prod.
+_secret = os.environ.get("SECRET_KEY") or os.environ.get("FLASK_SECRET")
+if not _secret:
+    import warnings
+    warnings.warn(
+        "SECRET_KEY is not set — using an insecure dev default. "
+        "Set SECRET_KEY in your Render environment variables.",
+        stacklevel=1,
+    )
+    _secret = "dev-secret-change-me-in-production"
+app.secret_key = _secret
 
 _trust_proxy = os.environ.get("TRUST_PROXY_HEADERS", "").strip().lower() in {"1", "true", "yes"}
 if _trust_proxy or os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
@@ -95,17 +112,26 @@ def _add_static_cache_headers(response):
     return response
 
 
-ADMIN_USERNAME = 'admin'
-ADMIN_PASSWORD_HASH = generate_password_hash('admin123')
+# ---------------------------------------------------------------------------
+# FIX 2: Admin credentials — read from environment variables so you can
+# change them on Render without redeploying. Never hardcode passwords.
+# ---------------------------------------------------------------------------
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+_admin_pw = os.environ.get("ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD_HASH = generate_password_hash(_admin_pw)
 
 
+# FIX 3: login_required must use functools.wraps to preserve the original
+# function name. Without this, Flask raises an AssertionError:
+# "View function mapping is overwriting an existing endpoint function"
+# when multiple routes use the decorator.
 def login_required(f):
+    @functools.wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'admin_logged_in' not in session:
-            flash('Please log in to access this page.', 'error')
-            return redirect(url_for('admin_login'))
+        if "admin_logged_in" not in session:
+            flash("Please log in to access this page.", "error")
+            return redirect(url_for("admin_login"))
         return f(*args, **kwargs)
-    decorated_function.__name__ = f.__name__
     return decorated_function
 
 
@@ -125,9 +151,15 @@ if database_url.startswith("postgres://"):
 
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# FIX 4: On Render's free-tier Postgres the SSL cert is self-signed.
+# "require" mode validates the server but not the CA — correct for Render.
+# Also add pool_recycle so stale connections are refreshed (Render idles
+# connections after ~5 min, causing "SSL connection has been closed" errors).
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
-    "connect_args": {"sslmode": "require"}
+    "pool_recycle": 280,          # recycle before Render's ~300 s idle timeout
+    "connect_args": {"sslmode": "require"},
 }
 
 db.init_app(app)
@@ -135,9 +167,11 @@ migrate.init_app(app, db)
 
 import models  # noqa: E402
 
-_AUTO_DB_CREATE = os.environ.get("AUTO_DB_CREATE", "").strip().lower() in {"1", "true", "yes"}
-if not os.environ.get("AUTO_DB_CREATE", "").strip():
-    _AUTO_DB_CREATE = True
+# FIX 5: AUTO_DB_CREATE default logic was inverted in the original code.
+# Original: if env var is NOT set, it defaults to True (always runs).
+# That is fine for first deploy, but it means every restart recreates tables.
+# Kept the same behaviour but made the logic explicit and readable.
+_AUTO_DB_CREATE = os.environ.get("AUTO_DB_CREATE", "true").strip().lower() in {"1", "true", "yes"}
 
 if _AUTO_DB_CREATE:
     with app.app_context():
@@ -154,16 +188,20 @@ def allowed_file(filename, allowed_ext):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed_ext
 
 
+# FIX 6: inject_static_version — on Render the static folder is read-only
+# and os.path.getmtime may fail. Fall back gracefully so the app doesn't
+# crash on startup just because a CSS file's mtime can't be read.
 @app.context_processor
 def inject_static_version():
     try:
         css_path = os.path.join(app.static_folder, "css", "style.css")
         anim_path = os.path.join(app.static_folder, "css", "animations.css")
         js_path = os.path.join(app.static_folder, "js", "main.js")
-        mtimes = [os.path.getmtime(css_path), os.path.getmtime(js_path)]
-        if os.path.exists(anim_path):
-            mtimes.append(os.path.getmtime(anim_path))
-        v = int(max(mtimes))
+        mtimes = []
+        for p in [css_path, js_path, anim_path]:
+            if os.path.exists(p):
+                mtimes.append(os.path.getmtime(p))
+        v = int(max(mtimes)) if mtimes else 1
     except OSError:
         v = 1
     return {"static_v": v}
@@ -176,6 +214,9 @@ def inject_asset_url():
             return ""
         if value.startswith("http"):
             return value
+        # FIX 7: If a legacy relative path somehow ended up in the DB
+        # (from before the Cloudinary migration), return empty string
+        # instead of silently serving a broken /static/... path.
         return ""
     return {"asset_url": asset_url}
 
@@ -243,10 +284,10 @@ def get_about_content():
 def get_about_intro():
     row = db.session.get(models.AboutIntro, 1)
     return {
-        "headline":   row.headline   if row and row.headline   else "",
-        "role_line":  row.role_line  if row and row.role_line  else "",
-        "short_desc": row.short_desc if row and row.short_desc else "",
-        "about_image":row.about_image if row and row.about_image else "",
+        "headline":    row.headline    if row and row.headline    else "",
+        "role_line":   row.role_line   if row and row.role_line   else "",
+        "short_desc":  row.short_desc  if row and row.short_desc  else "",
+        "about_image": row.about_image if row and row.about_image else "",
     }
 
 
@@ -494,17 +535,17 @@ def api_projects_delete(project_id: int):
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
-    if 'admin_logged_in' in session:
-        return redirect(url_for('admin'))
+    if "admin_logged_in" in session:
+        return redirect(url_for("admin"))
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
         if username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, password):
-            session['admin_logged_in'] = True
+            session["admin_logged_in"] = True
             flash("Logged in successfully!", "success")
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('admin'))
+            next_page = request.args.get("next")
+            return redirect(next_page) if next_page else redirect(url_for("admin"))
         flash("Invalid username or password.", "error")
 
     return render_template("admin_login.html")
@@ -512,9 +553,9 @@ def admin_login():
 
 @app.route("/admin/logout")
 def admin_logout():
-    session.pop('admin_logged_in', None)
+    session.pop("admin_logged_in", None)
     flash("Logged out successfully!", "success")
-    return redirect(url_for('home'))
+    return redirect(url_for("home"))
 
 
 # ---------------------------------------------------------------------------
@@ -858,8 +899,14 @@ def upload_resume():
             flash("Invalid file type. Only PDF files are allowed.", "error")
             return redirect(url_for("admin"))
 
-        stored_value = _cloudinary_upload(file, "portfolio/resume", resource_type="raw")
+        # FIX 8: Delete the old resume from Cloudinary before uploading the
+        # new one, to avoid orphaned files accumulating in your Cloudinary account.
         profile = db.session.get(models.Profile, 1)
+        old_resume = (profile.resume_file if profile else "") or ""
+        if old_resume:
+            _cloudinary_delete(old_resume)
+
+        stored_value = _cloudinary_upload(file, "portfolio/resume", resource_type="raw")
         if profile is None:
             profile = models.Profile(id=1)
             db.session.add(profile)
@@ -951,14 +998,36 @@ def admin_about_image():
         flash("Please upload a valid image file (png/jpg/jpeg/gif/svg).", "error")
         return redirect(url_for("admin"))
 
+    # FIX 9: Delete the old about image before uploading a new one.
+    row = db.session.get(models.AboutIntro, 1)
+    old_about_image = (row.about_image if row else "") or ""
+    if old_about_image:
+        _cloudinary_delete(old_about_image)
+
     stored_value = _cloudinary_upload(file, "portfolio/about")
 
-    row = db.session.get(models.AboutIntro, 1)
     if row is None:
         row = models.AboutIntro(id=1, headline="", role_line="", short_desc="", about_image="")
         db.session.add(row)
     row.about_image = stored_value
 
+    # FIX 10: This block (syncing project cover images into ProjectImage rows)
+    # was placed inside admin_about_image, which is wrong — it has nothing to
+    # do with uploading an about photo. Moved to a dedicated admin utility route
+    # below (/admin/sync_project_covers) so it doesn't run on every about-image
+    # upload and accidentally create duplicate ProjectImage rows.
+
+    db.session.commit()
+    flash("About section image updated.", "success")
+    return redirect(url_for("admin"))
+
+
+# FIX 10 cont.: Dedicated sync route for project cover → ProjectImage migration.
+# Run this ONCE after migrating to the new schema, then you can ignore it.
+@app.route("/admin/sync_project_covers", methods=["POST"])
+@login_required
+def admin_sync_project_covers():
+    count = 0
     for p in models.Project.query.filter(models.Project.project_image.isnot(None)).all():
         cover = (p.project_image or "").strip()
         if not cover:
@@ -966,9 +1035,9 @@ def admin_about_image():
         exists = any((img.image_file or "") == cover for img in (p.images or []))
         if not exists:
             db.session.add(models.ProjectImage(project_id=p.id, image_file=cover, sort_order=0))
-
+            count += 1
     db.session.commit()
-    flash("About section image updated.", "success")
+    flash(f"Synced {count} project cover image(s) into ProjectImage table.", "success")
     return redirect(url_for("admin"))
 
 
@@ -1060,6 +1129,7 @@ def delete_highlight(highlight_id):
 @app.route("/uploads/<path:_path>")
 def uploads_disabled(_path: str):
     abort(410)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))

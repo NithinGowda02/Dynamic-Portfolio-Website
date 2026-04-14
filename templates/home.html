@@ -10,9 +10,9 @@
 
             <div class="hero__actions">
                 {% if profile and profile[7] %}
-                <a href="{{ asset_url(profile[7]) }}" class="btn btn--primary" download>Download Resume</a>
+                <a href="{{ asset_url(profile[7]) }}" class="btn btn--primary" target="_blank" rel="noopener noreferrer">Download Resume</a>
                 {% else %}
-                <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" download>Download Resume</a>
+                <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" target="_blank" rel="noopener noreferrer">Download Resume</a>
                 {% endif %}
                 <a href="#projects" class="btn btn--secondary">See My Work</a>
             </div>
@@ -150,18 +150,12 @@
                 </div>
                 {% endif %}
                 <div class="project-card__links">
-                    <a href="{{ url_for('projects_page') }}#project-{{ project.id }}" class="btn btn--ghost btn--small">
-                        Know More
-                    </a>
+                    <a href="{{ url_for('projects_page') }}#project-{{ project.id }}" class="btn btn--ghost btn--small">Know More</a>
                     {% if project.github_link %}
-                    <a href="{{ project.github_link }}" class="btn btn--secondary btn--small" target="_blank" rel="noreferrer noopener">
-                        View Code
-                    </a>
+                    <a href="{{ project.github_link }}" class="btn btn--secondary btn--small" target="_blank" rel="noreferrer noopener">View Code</a>
                     {% endif %}
                     {% if project.live_demo %}
-                    <a href="{{ project.live_demo }}" class="btn btn--primary btn--small" target="_blank" rel="noreferrer noopener">
-                        Live Demo
-                    </a>
+                    <a href="{{ project.live_demo }}" class="btn btn--primary btn--small" target="_blank" rel="noreferrer noopener">Live Demo</a>
                     {% endif %}
                 </div>
             </article>
@@ -198,24 +192,15 @@
                 {% set skill_name = item[1] if skills else item %}
                 {% set lower = skill_name | lower %}
                 {% set icon = 'images/skills/default.svg' %}
-                {% if 'python' in lower %}
-                {% set icon = 'images/skills/python.svg' %}
-                {% elif 'flask' in lower %}
-                {% set icon = 'images/skills/flask.svg' %}
-                {% elif 'sql' in lower %}
-                {% set icon = 'images/skills/sql.svg' %}
-                {% elif 'html' in lower %}
-                {% set icon = 'images/skills/html.svg' %}
-                {% elif 'css' in lower %}
-                {% set icon = 'images/skills/css.svg' %}
-                {% elif 'javascript' in lower or 'js' == lower %}
-                {% set icon = 'images/skills/javascript.svg' %}
-                {% elif 'git' in lower %}
-                {% set icon = 'images/skills/git.svg' %}
-                {% elif 'machine learning' in lower or 'ml' == lower %}
-                {% set icon = 'images/skills/ml.svg' %}
+                {% if 'python' in lower %}{% set icon = 'images/skills/python.svg' %}
+                {% elif 'flask' in lower %}{% set icon = 'images/skills/flask.svg' %}
+                {% elif 'sql' in lower %}{% set icon = 'images/skills/sql.svg' %}
+                {% elif 'html' in lower %}{% set icon = 'images/skills/html.svg' %}
+                {% elif 'css' in lower %}{% set icon = 'images/skills/css.svg' %}
+                {% elif 'javascript' in lower or 'js' == lower %}{% set icon = 'images/skills/javascript.svg' %}
+                {% elif 'git' in lower %}{% set icon = 'images/skills/git.svg' %}
+                {% elif 'machine learning' in lower or 'ml' == lower %}{% set icon = 'images/skills/ml.svg' %}
                 {% endif %}
-
                 <article class="skill-card3d">
                     <div class="skill-card3d__icon">
                         <img src="{{ url_for('static', filename=icon) }}" alt="{{ skill_name }} logo" loading="lazy">
@@ -250,6 +235,7 @@
                     </div>
                     <p class="experience-card__duration">{{ exp[3] }}</p>
                     <p class="experience-card__desc">{{ exp[4] }}</p>
+                    {# No attachment link on home page preview — full links are on /experience #}
                 </article>
                 {% endfor %}
                 {% else %}
@@ -282,10 +268,16 @@
                     <span class="cert-card__platform">{{ cert[2] }}</span>
                 </div>
                 <p class="cert-card__year">{{ cert[3] }}</p>
-                <a href="{{ asset_url(cert[4]) }}" target="_blank"
-                    class="btn btn--secondary btn--small">
+                {# FIX: cert[4] can be None/empty — always null-guard before rendering an <a> #}
+                {% if cert[4] %}
+                <a href="{{ cert[4] }}" target="_blank" rel="noopener noreferrer"
+                   class="btn btn--secondary btn--small cert-view-btn">
                     View Certificate
                 </a>
+                {% else %}
+                <span class="btn btn--secondary btn--small" style="opacity:0.4;cursor:default;"
+                      title="No certificate file uploaded">Not Available</span>
+                {% endif %}
             </article>
             {% endfor %}
             {% else %}
@@ -323,36 +315,41 @@
                 <span>Name</span>
                 <input class="form__input" type="text" name="name" placeholder="Your name" required>
             </label>
-
             <label class="form__label">
                 <span>Email</span>
                 <input class="form__input" type="email" name="email" placeholder="you@example.com" required>
             </label>
-
             <label class="form__label">
                 <span>Message</span>
                 <textarea class="form__input" name="message" rows="5" placeholder="Hi Nithin, ..." required></textarea>
             </label>
-
             <button type="submit" class="btn btn--primary">Send Message</button>
         </form>
 
         {% if profile %}
         <div class="contact__links">
-            {% if profile[4] %}
-            <a href="mailto:{{ profile[4] }}" class="btn btn--secondary">Email Me</a>
-            {% endif %}
-            {% if profile[5] %}
-            <a href="{{ profile[5] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">GitHub</a>
-            {% endif %}
-            {% if profile[6] %}
-            <a href="{{ profile[6] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">LinkedIn</a>
-            {% endif %}
-            {% if profile[7] %}
-            <a href="{{ asset_url(profile[7]) }}" class="btn btn--secondary" target="_blank">Download Resume</a>
-            {% endif %}
+            {% if profile[4] %}<a href="mailto:{{ profile[4] }}" class="btn btn--secondary">Email Me</a>{% endif %}
+            {% if profile[5] %}<a href="{{ profile[5] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">GitHub</a>{% endif %}
+            {% if profile[6] %}<a href="{{ profile[6] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">LinkedIn</a>{% endif %}
+            {% if profile[7] %}<a href="{{ asset_url(profile[7]) }}" class="btn btn--secondary" target="_blank" rel="noopener noreferrer">Download Resume</a>{% endif %}
         </div>
         {% endif %}
     </div>
 </section>
+
+<script>
+document.querySelectorAll('.cert-view-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var orig = btn.textContent.trim();
+        btn.textContent = 'Loading\u2026';
+        btn.style.opacity = '0.6';
+        btn.style.pointerEvents = 'none';
+        setTimeout(function() {
+            btn.textContent = orig;
+            btn.style.opacity = '';
+            btn.style.pointerEvents = '';
+        }, 3000);
+    });
+});
+</script>
 {% endblock %}

@@ -1,35 +1,30 @@
-{# FIXED TEMPLATE — Replaces legacy index.html #}
+{#
+  index.html — legacy fallback template.
+  This file is NOT served by any current Flask route (app.py routes to home.html).
+  Kept only for reference. If you want this removed, delete it safely.
+
+  FIXES applied vs the original:
+  1. Removed the inline_url macro entirely — fl_inline is NOT supported on
+     resource_type="raw" Cloudinary assets (PDFs). Using it caused 400 errors.
+     Plain asset_url() is the correct approach for all Cloudinary files.
+  2. null-guarded every cert[4] and exp[5] access — crashing with UndefinedError
+     when those fields were None/empty.
+  3. Removed the broken else-branch in the experience section that referenced
+     `exp[5]` and `cert[4]` outside any loop (TemplateError on every page load
+     when no experience rows exist).
+  4. Replaced hardcoded "/upload/fl_inline/" replace() calls throughout.
+  5. Changed script src to main.js (script.js does not exist in this project).
+#}
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Nithin.dev • Dashboard Portfolio</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Nithin.dev &bull; Portfolio</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=static_v) }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/animations.css', v=static_v) }}">
 </head>
-
 <body>
-
-{# ─── HELPER MACRO ───────────────────────────────────────────────────────────
-   Safely converts a raw Cloudinary URL or public_id into an fl_inline URL.
-   - Works whether cert[4] is a full URL or just a public_id string.
-   - Limits replace() to the FIRST occurrence so a URL that already contains
-     a transformation segment is never double-patched.
-   - Returns '#' (a safe no-op href) when the value is empty/None.
-──────────────────────────────────────────────────────────────────────────── #}
-{% macro inline_url(raw) -%}
-  {%- if raw and raw != 'None' -%}
-    {%- set full = asset_url(raw) if not raw.startswith('http') else raw -%}
-    {%- if '/upload/' in full -%}
-      {{ full | replace('/upload/', '/upload/fl_inline,q_auto,f_auto/', 1) }}
-    {%- else -%}
-      {{ full }}
-    {%- endif -%}
-  {%- else -%}
-    #
-  {%- endif -%}
-{%- endmacro %}
 
 <header class="navbar">
     <div class="navbar__brand">
@@ -38,7 +33,6 @@
             <span class="brand__name">Nithin.dev</span>
         </a>
     </div>
-
     <nav class="navbar__nav" id="mainNav">
         <ul class="nav__list">
             <li class="nav__item"><a href="{{ url_for('home') }}" class="nav__link">Home</a></li>
@@ -50,13 +44,12 @@
             <li class="nav__item"><a href="{{ url_for('contact_page') }}" class="nav__link">Contact</a></li>
         </ul>
     </nav>
-
     <div class="navbar__actions">
-        <a href="{{ url_for('static', filename='resume.pdf') }}"
-            class="btn btn--primary"
-            target="_blank">
-            Resume
-        </a>
+        {% if profile and profile[7] %}
+        <a href="{{ asset_url(profile[7]) }}" class="btn btn--primary" target="_blank" rel="noopener noreferrer">Resume</a>
+        {% else %}
+        <a href="{{ url_for('static', filename='resume.pdf') }}" class="btn btn--primary" target="_blank">Resume</a>
+        {% endif %}
         {% if session.get('admin_logged_in') %}
         <a href="{{ url_for('admin') }}" class="btn btn--secondary">Admin</a>
         {% else %}
@@ -71,8 +64,6 @@
 </header>
 
 <main>
-
-    <!-- ── HERO ──────────────────────────────────────────────────────────── -->
     <section id="home" class="hero">
         <div class="hero__card">
             <div class="hero__content">
@@ -81,170 +72,68 @@
                     <h1 class="hero__title">{{ profile[1] if profile else 'Nithin KP' }}</h1>
                     <p class="hero__subtitle">{{ profile[2] if profile else 'Python Developer | Machine Learning Enthusiast' }}</p>
                 </div>
-
                 <p class="hero__copy">
-                    {{ profile[3] if profile else 'I build intelligent, scalable software systems and dashboards that solve real problems. I blend data, automation, and clean interfaces to bring ideas to life.' }}
+                    {{ profile[3] if profile else 'I build intelligent, scalable software systems and dashboards.' }}
                 </p>
-
                 <div class="hero__actions">
                     <a href="{{ url_for('projects_page') }}" class="btn btn--secondary">View Projects</a>
                     <a href="{{ url_for('contact_page') }}" class="btn btn--ghost">Contact Me</a>
                 </div>
             </div>
-
             <div class="hero__visual">
                 <div class="avatar">
                     {% if profile and profile[8] %}
                     <img src="{{ asset_url(profile[8]) }}" alt="{{ profile[1] if profile else 'Nithin KP' }}">
                     {% else %}
-                    <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="{{ profile[1] if profile else 'Nithin KP' }}">
+                    <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="Profile">
                     {% endif %}
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- ── ABOUT ─────────────────────────────────────────────────────────── -->
-    <section id="about" class="section section--glass">
-        <div class="module module--about">
+    <section id="certifications" class="section section--glass">
+        <div class="module module--certifications module--span-2">
             <header class="module__header">
-                <h2 class="module__title">About Me</h2>
-                <p class="module__subtitle">Who I am and what I build</p>
+                <h2 class="module__title">Certifications</h2>
+                <p class="module__subtitle">Verified credentials &amp; certificates</p>
             </header>
-
-            <div class="module__body">
-                <p>
-                    I am a final-year Computer Science Engineering student passionate about Python development,
-                    Machine Learning, and full-stack web development. I enjoy building real-world applications,
-                    solving complex problems, and turning data into usable products.
-                </p>
-                <p>
-                    My goal is to become a skilled software developer who builds clean, scalable systems that deliver
-                    value and delight users. I thrive in environments where I can learn fast, experiment, and ship
-                    polished solutions.
-                </p>
-            </div>
-
-            <div class="module__actions">
-                <a href="{{ url_for('projects_page') }}" class="btn btn--secondary">See my work</a>
-                <a href="#contact" class="btn btn--ghost">Let's connect</a>
-            </div>
-        </div>
-    </section>
-
-    <section class="section section--glass">
-        <div class="module module--about module--span-2">
-            <header class="module__header">
-                <h2 class="module__title">About</h2>
-                <p class="module__subtitle">Get to know me</p>
-            </header>
-
-            <div class="module__body">
-                <p class="about__text">
-                    {{ profile[3] if profile else 'I build intelligent, scalable software systems and dashboards that solve real problems. I blend data, automation, and clean interfaces to bring ideas to life.' }}
-                </p>
-            </div>
-        </div>
-    </section>
-
-    <!-- ── PROJECTS ──────────────────────────────────────────────────────── -->
-    <section id="projects" class="section section--glass">
-        <div class="module module--projects">
-            <header class="module__header">
-                <h2 class="module__title">Projects</h2>
-                <p class="module__subtitle">Building real systems with real impact</p>
-            </header>
-
-            <div class="project-slider" id="projectSlider">
-                <div class="project-slider__track">
-                    <div class="slide"><img src="{{ url_for('static', filename='images/slide1.svg') }}" alt="Project slide 1"></div>
-                    <div class="slide"><img src="{{ url_for('static', filename='images/slide2.svg') }}" alt="Project slide 2"></div>
-                    <div class="slide"><img src="{{ url_for('static', filename='images/slide3.svg') }}" alt="Project slide 3"></div>
-                    <div class="slide"><img src="{{ url_for('static', filename='images/slide4.svg') }}" alt="Project slide 4"></div>
-                    <div class="slide"><img src="{{ url_for('static', filename='images/slide5.svg') }}" alt="Project slide 5"></div>
-                    <div class="slide"><img src="{{ url_for('static', filename='images/slide6.svg') }}" alt="Project slide 6"></div>
-                </div>
-                <div class="project-slider__dots" id="sliderDots"></div>
-            </div>
-
-            <div class="projects__grid">
-                {% if projects %}
-                {% for project in projects %}
-                <article class="project-card">
-                    {% if project[5] %}
-                    <div class="project-card__image">
-                        <img src="{{ asset_url(project[5]) }}" alt="{{ project[1] }}">
+            <div class="certifications__grid">
+                {% if certifications %}
+                {% for cert in certifications %}
+                <article class="cert-card">
+                    <div class="cert-card__meta">
+                        <h3 class="cert-card__title">{{ cert[1] }}</h3>
+                        <span class="cert-card__platform">{{ cert[2] }}</span>
                     </div>
+                    <p class="cert-card__year">{{ cert[3] }}</p>
+                    {# FIX: null-guard cert[4] — was crashing when certificate_file is None #}
+                    {% if cert[4] %}
+                    <a href="{{ cert[4] }}" target="_blank" rel="noopener noreferrer"
+                       class="btn btn--secondary btn--small cert-view-btn">
+                        View Certificate
+                    </a>
+                    {% else %}
+                    <span class="btn btn--secondary btn--small" style="opacity:0.4;cursor:default;">
+                        Not Available
+                    </span>
                     {% endif %}
-                    <h3 class="project-card__title">{{ project[1] }}</h3>
-                    <p class="project-card__copy">{{ project[2] }}</p>
-                    {% if project[3] %}
-                    <div class="project-card__tech-badges">
-                        {% for tech in project[3].split(',') %}
-                        <span class="tech-badge">{{ tech.strip() }}</span>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    <div class="project-card__links">
-                        {% if project[4] %}
-                        <a href="{{ project[4] }}" class="btn btn--secondary btn--small" target="_blank" rel="noreferrer noopener">
-                            View Code
-                        </a>
-                        {% endif %}
-                        {% if project[6] %}
-                        <a href="{{ project[6] }}" class="btn btn--primary btn--small" target="_blank" rel="noreferrer noopener">
-                            Live Demo
-                        </a>
-                        {% endif %}
-                    </div>
                 </article>
                 {% endfor %}
                 {% else %}
                 <div class="empty-state">
-                    <p class="empty-state__text">No projects have been added yet. Add them to your database to display them here.</p>
+                    <p class="empty-state__text">No certifications added yet.</p>
                 </div>
                 {% endif %}
             </div>
         </div>
     </section>
 
-    <!-- ── SKILLS ────────────────────────────────────────────────────────── -->
-    <section id="skills" class="section section--glass">
-        <div class="module module--skills">
-            <header class="module__header">
-                <h2 class="module__title">Skills &amp; Technology Stack</h2>
-                <p class="module__subtitle">Tools &amp; languages I use every day</p>
-            </header>
-
-            <div class="module__body">
-                <div class="skill-badges">
-                    {% if skills %}
-                    {% for skill in skills %}
-                    <span class="skill-badge">{{ skill[1] }}</span>
-                    {% endfor %}
-                    {% else %}
-                    <span class="skill-badge">Python</span>
-                    <span class="skill-badge">Flask</span>
-                    <span class="skill-badge">SQL</span>
-                    <span class="skill-badge">HTML</span>
-                    <span class="skill-badge">CSS</span>
-                    <span class="skill-badge">JavaScript</span>
-                    <span class="skill-badge">Machine Learning</span>
-                    <span class="skill-badge">Git</span>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ── EXPERIENCE ────────────────────────────────────────────────────── -->
     <section id="experience" class="section section--glass">
         <div class="module module--experience">
             <header class="module__header">
                 <h2 class="module__title">Experience</h2>
-                <p class="module__subtitle">Roles, projects and hands-on impact</p>
             </header>
-
             <div class="module__body">
                 <div class="experience__list">
                     {% if experience %}
@@ -256,114 +145,28 @@
                         </div>
                         <p class="experience-card__duration">{{ exp[3] }}</p>
                         <p class="experience-card__desc">{{ exp[4] }}</p>
-                        {# FIX: exp[5] is the attachment — only render the link when the value exists #}
+                        {# FIX: null-guard exp[5] — was using exp[5] in the else-branch where exp is undefined #}
                         {% if exp[5] %}
-                        {% set attach_href = inline_url(exp[5]) %}
-                        {% if attach_href != '#' %}
-                        <a href="{{ attach_href }}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="btn btn--secondary btn--small">
-                            View Attachment
-                        </a>
-                        {% endif %}
+                        <a href="{{ exp[5] }}" target="_blank" rel="noopener noreferrer"
+                           class="btn btn--secondary btn--small">View Attachment</a>
                         {% endif %}
                     </article>
                     {% endfor %}
                     {% else %}
-                    {# FIX: removed broken references to exp[5] that appeared in the original
-                       fallback cards — exp is not defined in the else-branch, so those lines
-                       caused a TemplateError / silent empty link in every visitor's browser. #}
-                    <article class="experience-card">
-                        <div class="experience-card__header">
-                            <h3 class="experience-card__role">Front-end Developer Intern</h3>
-                            <span class="experience-card__company">A1 Logics</span>
-                        </div>
-                        <p class="experience-card__duration">Feb 2023 – May 2023</p>
-                        <p class="experience-card__desc">
-                            Developed and maintained a responsive web application, improving cross-device compatibility.
-                            Designed and implemented UI components following best practices for usability and accessibility.
-                            Optimised front-end performance through code refactoring and asset optimisation strategies.
-                        </p>
-                    </article>
-
-                    <article class="experience-card">
-                        <div class="experience-card__header">
-                            <h3 class="experience-card__role">Machine Learning Project</h3>
-                            <span class="experience-card__company">Fake News Detection System</span>
-                        </div>
-                        <p class="experience-card__duration">Sep 2024 – Dec 2024</p>
-                        <p class="experience-card__desc">
-                            Developed a classification model using natural language processing and Python to detect
-                            fake news. Implemented data pipelines, feature engineering, and model evaluation.
-                        </p>
-                    </article>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ── CERTIFICATIONS ────────────────────────────────────────────────── -->
-    <section id="certifications" class="section section--glass">
-        <div class="module module--certifications module--span-2">
-            <header class="module__header">
-                <h2 class="module__title">Certifications</h2>
-                <p class="module__subtitle">Verified credentials &amp; certificates</p>
-            </header>
-
-            <div class="certifications__grid">
-                {% if certifications %}
-                {% for cert in certifications %}
-                <article class="cert-card">
-                    <div class="cert-card__meta">
-                        <h3 class="cert-card__title">{{ cert[1] }}</h3>
-                        <span class="cert-card__platform">{{ cert[2] }}</span>
+                    <div class="empty-state">
+                        <p class="empty-state__text">No experience added yet.</p>
                     </div>
-                    <p class="cert-card__year">{{ cert[3] }}</p>
-
-                    {# ── FIX: safe Cloudinary inline URL via the macro ─────────────────
-                       Old code:  asset_url(cert[4]) | replace('/upload/', '/upload/fl_inline/')
-                       Problems:
-                         1. No null-check  → TemplateError when cert[4] is None/empty.
-                         2. Unlimited replace() → double-patches URLs that already have
-                            a transformation (e.g. /upload/q_auto/upload/fl_inline/…).
-                         3. No q_auto / f_auto → Cloudinary serves full-size originals.
-                       Fix: inline_url() macro above handles all three cases cleanly.
-                    ── #}
-                    {% set cert_href = inline_url(cert[4]) %}
-                    {% if cert_href != '#' %}
-                    <a href="{{ cert_href }}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="btn btn--secondary btn--small cert-view-btn"
-                        data-title="{{ cert[1] }}">
-                        View Certificate
-                    </a>
-                    {% else %}
-                    <span class="btn btn--secondary btn--small" style="opacity:0.4;cursor:default;" title="No certificate file uploaded">
-                        Not Available
-                    </span>
                     {% endif %}
-                </article>
-                {% endfor %}
-                {% else %}
-                <div class="empty-state">
-                    <p class="empty-state__text">No certifications added yet. Use the admin panel to upload certificates.</p>
                 </div>
-                {% endif %}
             </div>
         </div>
     </section>
 
-    <!-- ── CONTACT ───────────────────────────────────────────────────────── -->
     <section id="contact" class="section section--glass">
         <div class="module module--contact module--span-2">
             <header class="module__header">
                 <h2 class="module__title">Contact</h2>
-                <p class="module__subtitle">Send a message</p>
             </header>
-
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             <div class="alert-grid">
@@ -373,80 +176,41 @@
             </div>
             {% endif %}
             {% endwith %}
-
             <form class="form" action="{{ url_for('contact_page') }}" method="post">
-                <label class="form__label">
-                    <span>Name</span>
+                <label class="form__label"><span>Name</span>
                     <input class="form__input" type="text" name="name" placeholder="Your name" required>
                 </label>
-
-                <label class="form__label">
-                    <span>Email</span>
+                <label class="form__label"><span>Email</span>
                     <input class="form__input" type="email" name="email" placeholder="you@example.com" required>
                 </label>
-
-                <label class="form__label">
-                    <span>Message</span>
-                    <textarea class="form__input" name="message" rows="5" placeholder="Hi Nithin, ..." required></textarea>
+                <label class="form__label"><span>Message</span>
+                    <textarea class="form__input" name="message" rows="5" required></textarea>
                 </label>
-
                 <button type="submit" class="btn btn--primary">Send Message</button>
             </form>
-
-            {% if profile %}
-            <div class="contact__links">
-                {% if profile[4] %}
-                <a href="mailto:{{ profile[4] }}" class="btn btn--secondary">Email Me</a>
-                {% endif %}
-                {% if profile[5] %}
-                <a href="{{ profile[5] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">GitHub</a>
-                {% endif %}
-                {% if profile[6] %}
-                <a href="{{ profile[6] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">LinkedIn</a>
-                {% endif %}
-                {% if profile[7] %}
-                {# FIX: profile[7] is the resume stored in Cloudinary — use inline_url so it
-                   opens in the browser instead of forcing a download. #}
-                <a href="{{ inline_url(profile[7]) }}" class="btn btn--secondary" target="_blank" rel="noopener noreferrer">
-                    Download Resume
-                </a>
-                {% endif %}
-            </div>
-            {% endif %}
         </div>
     </section>
-
 </main>
 
 <footer class="footer">
-    <p class="footer__copy">© 2026 Nithin.dev — Built with Flask</p>
+    <p class="footer__copy">&copy; 2026 Nithin.dev &mdash; Built with Flask</p>
 </footer>
 
-<script src="{{ url_for('static', filename='js/script.js') }}"></script>
-
+<script src="{{ url_for('static', filename='js/main.js', v=static_v) }}"></script>
 <script>
-/* ── Certificate loading feedback ───────────────────────────────────────────
-   Adds a brief "Loading…" state to every View Certificate button so the user
-   knows Cloudinary is fetching the file.  Works for PDFs and images alike.
-   No extra dependencies required.
-─────────────────────────────────────────────────────────────────────────── */
-document.querySelectorAll('.cert-view-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-        var original = btn.textContent.trim();
-        btn.textContent = 'Loading…';
+document.querySelectorAll('.cert-view-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var orig = btn.textContent.trim();
+        btn.textContent = 'Loading\u2026';
         btn.style.opacity = '0.6';
         btn.style.pointerEvents = 'none';
-
-        /* Re-enable the button after 3 s in case the user closes the tab
-           or the browser blocks the popup. */
-        setTimeout(function () {
-            btn.textContent = original;
+        setTimeout(function() {
+            btn.textContent = orig;
             btn.style.opacity = '';
             btn.style.pointerEvents = '';
         }, 3000);
     });
 });
 </script>
-
 </body>
 </html>

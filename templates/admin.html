@@ -10,12 +10,14 @@
 <body>
     <header class="navbar">
         <div class="navbar__brand">
-            <a href="/" class="brand__link">
+            {# FIX: was a bare "/" — use url_for so it works with any URL prefix on Render #}
+            <a href="{{ url_for('home') }}" class="brand__link">
                 <span class="brand__logo">N</span>
                 <span class="brand__name">Nithin.dev</span>
             </a>
         </div>
         <div class="navbar__actions">
+            <a href="{{ url_for('home') }}" class="btn btn--ghost">View Portfolio</a>
             <a href="{{ url_for('admin_logout') }}" class="btn btn--ghost">Logout</a>
         </div>
     </header>
@@ -44,30 +46,36 @@
                 <header class="module__header">
                     <h2 class="module__title">Update Profile</h2>
                 </header>
-                <form class="form" action="/admin/profile" method="post">
+                {# FIX: form fields were empty — now pre-populated from `profile` context variable #}
+                <form class="form" action="{{ url_for('admin_profile') }}" method="post">
                     <label class="form__label">
                         <span>Name</span>
-                        <input class="form__input" type="text" name="name" required>
+                        <input class="form__input" type="text" name="name"
+                               value="{{ profile[1] if profile else '' }}" required>
                     </label>
                     <label class="form__label">
                         <span>Title</span>
-                        <input class="form__input" type="text" name="title" required>
+                        <input class="form__input" type="text" name="title"
+                               value="{{ profile[2] if profile else '' }}" required>
                     </label>
                     <label class="form__label">
                         <span>About</span>
-                        <textarea class="form__input" name="about" rows="4" required></textarea>
+                        <textarea class="form__input" name="about" rows="4" required>{{ profile[3] if profile else '' }}</textarea>
                     </label>
                     <label class="form__label">
                         <span>Email</span>
-                        <input class="form__input" type="email" name="email">
+                        <input class="form__input" type="email" name="email"
+                               value="{{ profile[4] if profile else '' }}">
                     </label>
                     <label class="form__label">
                         <span>GitHub</span>
-                        <input class="form__input" type="url" name="github">
+                        <input class="form__input" type="url" name="github"
+                               value="{{ profile[5] if profile else '' }}">
                     </label>
                     <label class="form__label">
                         <span>LinkedIn</span>
-                        <input class="form__input" type="url" name="linkedin">
+                        <input class="form__input" type="url" name="linkedin"
+                               value="{{ profile[6] if profile else '' }}">
                     </label>
                     <button type="submit" class="btn btn--primary">Update Profile</button>
                 </form>
@@ -81,7 +89,8 @@
                 <header class="module__header">
                     <h2 class="module__title">Add Project</h2>
                 </header>
-                <form class="form" action="/admin/projects" method="post" enctype="multipart/form-data">
+                {# FIX: was action="/admin/projects" — use url_for #}
+                <form class="form" action="{{ url_for('admin_projects') }}" method="post" enctype="multipart/form-data">
                     <label class="form__label">
                         <span>Project Title</span>
                         <input class="form__input" type="text" name="title" placeholder="Project Title" required>
@@ -92,7 +101,7 @@
                     </label>
                     <label class="form__label">
                         <span>Tech Stack</span>
-                        <input class="form__input" type="text" name="tech_stack" required>
+                        <input class="form__input" type="text" name="tech_stack" placeholder="Python, Flask, PostgreSQL">
                     </label>
                     <label class="form__label">
                         <span>GitHub Link</span>
@@ -103,9 +112,9 @@
                         <input class="form__input" type="url" name="live_demo">
                     </label>
                     <label class="form__label">
-                        <span>Project Image</span>
+                        <span>Project Images</span>
                         <input class="form__input" type="file" name="project_images" accept="image/*" multiple>
-                        <small style="color: rgba(229, 231, 255, 0.65);">Upload up to 6 images. The first image becomes the cover.</small>
+                        <small style="color: rgba(229, 231, 255, 0.65);">Upload up to 6 images. The first becomes the cover.</small>
                     </label>
                     <div class="form__actions">
                         <button type="submit" class="btn btn--primary">Add Project</button>
@@ -121,7 +130,13 @@
                 <header class="module__header">
                     <h2 class="module__title">Upload Profile Image</h2>
                 </header>
-                <p>Upload your profile image. This will replace the current image.</p>
+                {% if profile and profile[8] %}
+                <div style="margin-bottom:12px">
+                    <img src="{{ asset_url(profile[8]) }}" alt="Current profile image"
+                         style="width:72px;height:72px;object-fit:cover;border-radius:16px;">
+                </div>
+                {% endif %}
+                <p>Upload your profile image. This will replace the current one.</p>
                 <div class="form__actions">
                     <a href="{{ url_for('upload_profile_image') }}" class="btn btn--primary">Upload Image</a>
                 </div>
@@ -131,7 +146,7 @@
             <article class="module">
                 <header class="module__header">
                     <h2 class="module__title">Project Thumbnails</h2>
-                    <p class="module__subtitle">Adds images to the homepage sliding section</p>
+                    <p class="module__subtitle">Adds images to the homepage slider</p>
                 </header>
                 <form class="form" action="{{ url_for('admin_project_thumbnails_add') }}" method="post" enctype="multipart/form-data">
                     <label class="form__label">
@@ -141,7 +156,7 @@
                     <label class="form__label">
                         <span>Thumbnail Image</span>
                         <input class="form__input" type="file" name="thumbnail_image" accept="image/*" required>
-                        <small style="color: rgba(229, 231, 255, 0.65);">Only one image per thumbnail item.</small>
+                        <small style="color: rgba(229, 231, 255, 0.65);">One image per thumbnail.</small>
                     </label>
                     <label class="form__label">
                         <span>Sort Order</span>
@@ -159,10 +174,11 @@
                 <header class="module__header">
                     <h2 class="module__title">Add Skill</h2>
                 </header>
-                <form class="form" action="/admin/skills" method="post">
+                {# FIX: was action="/admin/skills" — use url_for #}
+                <form class="form" action="{{ url_for('admin_skills') }}" method="post">
                     <label class="form__label">
                         <span>Skill Name</span>
-                        <input class="form__input" type="text" name="skill_name" required>
+                        <input class="form__input" type="text" name="skill_name" placeholder="e.g., Python" required>
                     </label>
                     <button type="submit" class="btn btn--primary">Add Skill</button>
                 </form>
@@ -180,55 +196,56 @@
                 <form class="form" action="{{ url_for('admin_about') }}" method="post">
                     <label class="form__label">
                         <span>About Preview (2–3 lines)</span>
-                        <textarea class="form__input" name="preview_text" rows="3" placeholder="Short intro for the homepage...">{{
-                            about_content.preview_text if about_content else '' }}</textarea>
+                        <textarea class="form__input" name="preview_text" rows="3"
+                                  placeholder="Short intro for the homepage...">{{ about_content.preview_text if about_content else '' }}</textarea>
                     </label>
                     <label class="form__label">
                         <span>About Details (full text)</span>
-                        <textarea class="form__input" name="details_text" rows="6" placeholder="Longer about text for the homepage details section and About page...">{{
-                            about_content.details_text if about_content else '' }}</textarea>
+                        <textarea class="form__input" name="details_text" rows="6"
+                                  placeholder="Longer about text for the About page...">{{ about_content.details_text if about_content else '' }}</textarea>
                     </label>
                     <button type="submit" class="btn btn--primary">Update About</button>
                 </form>
             </article>
 
-            <!-- About Intro + Interests (Homepage Part 1) -->
+            <!-- About Intro + Image + Interests -->
             <article class="module module--span-2">
                 <header class="module__header">
                     <h2 class="module__title">About Intro (Homepage)</h2>
-                    <p class="module__subtitle">Minimal intro text + interest counters below the hero</p>
+                    <p class="module__subtitle">Intro text + interest counters below the hero</p>
                 </header>
 
                 <div class="module__body">
                     <h3 class="module__title">About Section Image</h3>
                     <p class="module__subtitle">Used in the About section on Home and About pages.</p>
 
-                    <div class="form__actions" style="align-items: center; justify-content: space-between; gap: 12px;">
-                        <div style="display:flex; align-items:center; gap:12px;">
+                    <div class="form__actions" style="align-items:center;justify-content:space-between;gap:12px;">
+                        <div style="display:flex;align-items:center;gap:12px;">
                             {% if about_intro and about_intro.about_image %}
                             <img src="{{ asset_url(about_intro.about_image) }}" alt="About section image"
-                                style="width:72px; height:72px; object-fit:cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
+                                 style="width:72px;height:72px;object-fit:cover;border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,0.35);">
                             {% elif profile and profile[8] %}
                             <img src="{{ asset_url(profile[8]) }}" alt="Profile image"
-                                style="width:72px; height:72px; object-fit:cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
+                                 style="width:72px;height:72px;object-fit:cover;border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,0.35);">
                             {% else %}
                             <img src="{{ url_for('static', filename='images/Profile.jpg') }}" alt="Profile image"
-                                style="width:72px; height:72px; object-fit:cover; border-radius: 16px; box-shadow: 0 18px 40px rgba(0,0,0,0.35);">
+                                 style="width:72px;height:72px;object-fit:cover;border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,0.35);">
                             {% endif %}
-                            <div style="color: rgba(229, 231, 255, 0.75);">
+                            <div style="color:rgba(229,231,255,0.75);">
                                 {% if about_intro and about_intro.about_image %}
-                                <div style="font-weight: 700; color: rgba(229, 231, 255, 0.95);">Custom About Image</div>
-                                <div style="font-size: 0.95rem;">{{ about_intro.about_image }}</div>
+                                <div style="font-weight:700;color:rgba(229,231,255,0.95);">Custom About Image</div>
                                 {% else %}
-                                <div style="font-weight: 700; color: rgba(229, 231, 255, 0.95);">Using Profile Image</div>
-                                <div style="font-size: 0.95rem;">Upload a different one if you want.</div>
+                                <div style="font-weight:700;color:rgba(229,231,255,0.95);">Using Profile Image</div>
+                                <div style="font-size:0.95rem;">Upload a different one if you want.</div>
                                 {% endif %}
                             </div>
                         </div>
 
-                        <form class="form" action="{{ url_for('admin_about_image') }}" method="post" enctype="multipart/form-data"
-                            style="display:flex; align-items:center; gap: 10px; margin: 0;">
-                            <input class="form__input" type="file" name="about_image" accept="image/*" required style="max-width: 260px;">
+                        <form class="form" action="{{ url_for('admin_about_image') }}" method="post"
+                              enctype="multipart/form-data"
+                              style="display:flex;align-items:center;gap:10px;margin:0;">
+                            <input class="form__input" type="file" name="about_image" accept="image/*" required
+                                   style="max-width:260px;">
                             <button type="submit" class="btn btn--secondary">Upload</button>
                         </form>
                     </div>
@@ -237,15 +254,20 @@
                 <form class="form" action="{{ url_for('admin_about_intro') }}" method="post">
                     <label class="form__label">
                         <span>Headline</span>
-                        <input class="form__input" type="text" name="headline" placeholder="My Name is Nithin K P" value="{{ about_intro.headline if about_intro else '' }}">
+                        <input class="form__input" type="text" name="headline"
+                               placeholder="My Name is Nithin K P"
+                               value="{{ about_intro.headline if about_intro else '' }}">
                     </label>
                     <label class="form__label">
                         <span>Role Line</span>
-                        <input class="form__input" type="text" name="role_line" placeholder="Python Developer | Web Development" value="{{ about_intro.role_line if about_intro else '' }}">
+                        <input class="form__input" type="text" name="role_line"
+                               placeholder="Python Developer | Web Development"
+                               value="{{ about_intro.role_line if about_intro else '' }}">
                     </label>
                     <label class="form__label">
                         <span>Short Description (max 2 lines)</span>
-                        <textarea class="form__input" name="short_desc" rows="2" placeholder="Minimal description...">{{ about_intro.short_desc if about_intro else '' }}</textarea>
+                        <textarea class="form__input" name="short_desc" rows="2"
+                                  placeholder="Minimal description...">{{ about_intro.short_desc if about_intro else '' }}</textarea>
                     </label>
                     <button type="submit" class="btn btn--primary">Update Intro</button>
                 </form>
@@ -273,7 +295,7 @@
                         {% for it in about_interests %}
                         <div class="form__actions">
                             <span class="skill-badge">{{ it[1] }}</span>
-                            <span style="color: rgba(229, 231, 255, 0.7);">{{ it[2] }}</span>
+                            <span style="color:rgba(229,231,255,0.7);">{{ it[2] }}</span>
                             <form action="{{ url_for('delete_interest', interest_id=it[0]) }}" method="post">
                                 <button type="submit" class="btn btn--ghost btn--small"
                                     onclick="return confirm('Delete this interest?');">Delete</button>
@@ -291,7 +313,7 @@
             <article class="module module--span-2">
                 <header class="module__header">
                     <h2 class="module__title">Professional Highlights</h2>
-                    <p class="module__subtitle">Three capability cards shown on the homepage</p>
+                    <p class="module__subtitle">Capability cards shown on the homepage</p>
                 </header>
 
                 <form class="form" action="{{ url_for('admin_highlights') }}" method="post">
@@ -311,7 +333,8 @@
                     </label>
                     <label class="form__label">
                         <span>Description</span>
-                        <input class="form__input" type="text" name="description" placeholder="APIs, automation, clean backend architecture" required>
+                        <input class="form__input" type="text" name="description"
+                               placeholder="APIs, automation, clean backend architecture" required>
                     </label>
                     <label class="form__label">
                         <span>Sort Order</span>
@@ -326,7 +349,7 @@
                         {% for h in highlights %}
                         <div class="form__actions">
                             <span class="skill-badge">{{ h[2] }}</span>
-                            <span style="color: rgba(229, 231, 255, 0.7);">{{ h[3] }}</span>
+                            <span style="color:rgba(229,231,255,0.7);">{{ h[3] }}</span>
                             <form action="{{ url_for('delete_highlight', highlight_id=h[0]) }}" method="post">
                                 <button type="submit" class="btn btn--ghost btn--small"
                                     onclick="return confirm('Delete this highlight?');">Delete</button>
@@ -345,7 +368,8 @@
                 <header class="module__header">
                     <h2 class="module__title">Add Experience</h2>
                 </header>
-                <form class="form" action="/admin/experience" method="post" enctype="multipart/form-data">
+                {# FIX: was action="/admin/experience" — use url_for #}
+                <form class="form" action="{{ url_for('admin_experience') }}" method="post" enctype="multipart/form-data">
                     <label class="form__label">
                         <span>Role</span>
                         <input class="form__input" type="text" name="role" required>
@@ -378,7 +402,8 @@
                 <header class="module__header">
                     <h2 class="module__title">Add Certification</h2>
                 </header>
-                <form class="form" action="/admin/certifications" method="post" enctype="multipart/form-data">
+                {# FIX: was action="/admin/certifications" — use url_for #}
+                <form class="form" action="{{ url_for('admin_certifications') }}" method="post" enctype="multipart/form-data">
                     <label class="form__label">
                         <span>Title</span>
                         <input class="form__input" type="text" name="title" required>
@@ -407,16 +432,22 @@
                 <header class="module__header">
                     <h2 class="module__title">Upload Resume</h2>
                 </header>
-                <p>Upload your resume PDF file.</p>
+                {% if profile and profile[7] %}
+                <p>Current resume: <a href="{{ asset_url(profile[7]) }}" target="_blank" rel="noopener noreferrer"
+                   style="color:var(--color-text-info);">View current PDF</a></p>
+                {% else %}
+                <p>No resume uploaded yet.</p>
+                {% endif %}
                 <div class="form__actions">
-                    <a href="{{ url_for('upload_resume') }}" class="btn btn--primary">Upload Resume</a>
+                    <a href="{{ url_for('upload_resume') }}" class="btn btn--primary">Upload / Replace Resume</a>
                 </div>
             </article>
+
         </section>
     </main>
 
     <footer class="footer">
-        <p class="footer__copy">© 2026 Nithin.dev — Admin Dashboard</p>
+        <p class="footer__copy">&copy; 2026 Nithin.dev &mdash; Admin Dashboard</p>
     </footer>
 </body>
 </html>
