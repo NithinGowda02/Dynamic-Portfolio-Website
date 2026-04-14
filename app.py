@@ -1,4 +1,4 @@
-﻿﻿import os
+﻿import os
 import functools
 
 from flask import Flask, abort, flash, jsonify, redirect, render_template, request, session, url_for
