@@ -434,16 +434,21 @@ def contact_page():
         # Send email notification
         try:
             import resend
-            resend.api_key = os.environ.get("RESEND_API_KEY", "")
-            if resend.api_key:
+            resend.api_key = os.environ.get("RESEND_API_KEY")
+
+            if not resend.api_key:
+                print("[ERROR] RESEND_API_KEY not set")
+            else:
                 resend.Emails.send({
-                    "from": "onboarding@resend.dev",
+                    "from": "Portfolio <onboarding@resend.dev>",
                     "to": "nithinkp368@gmail.com",
                     "subject": f"Portfolio Contact from {name}",
+                    "reply_to": email,
                     "text": f"Name: {name}\nEmail: {email}\n\nMessage:\n{message}"
                 })
+
         except Exception as exc:
-            print(f"[WARN] Contact email failed: {exc}")
+            print(f"[ERROR] Contact email failed: {exc}")
 
         flash("Thanks for your message! I'll get back to you soon.", "success")
         if next_dest == "home":
