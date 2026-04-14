@@ -433,23 +433,15 @@ def contact_page():
 
         # Send email notification
         try:
-            import smtplib
-            from email.mime.text import MIMEText
-
-            _sender = os.environ.get("MAIL_USER", "")
-            _password = os.environ.get("MAIL_PASSWORD", "")
-
-            if _sender and _password:
-                msg = MIMEText(f"Name: {name}\nEmail: {email}\n\nMessage:\n{message}")
-                msg["Subject"] = f"Portfolio Contact from {name}"
-                msg["From"] = _sender
-                msg["To"] = "nithinkp368@gmail.com"
-
-                with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
-                    server.ehlo()
-                    server.starttls()
-                    server.login(_sender, _password)
-                    server.send_message(msg)
+            import resend
+            resend.api_key = os.environ.get("RESEND_API_KEY", "")
+            if resend.api_key:
+                resend.Emails.send({
+                    "from": "onboarding@resend.dev",
+                    "to": "nithinkp368@gmail.com",
+                    "subject": f"Portfolio Contact from {name}",
+                    "text": f"Name: {name}\nEmail: {email}\n\nMessage:\n{message}"
+                })
         except Exception as exc:
             print(f"[WARN] Contact email failed: {exc}")
 
