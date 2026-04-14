@@ -40,7 +40,10 @@
         {% if profile %}
         <div class="contact__links">
             {% if profile[4] %}
-            <a href="mailto:{{ profile[4] }}" class="btn btn--secondary">Email Me</a>
+            <a href="mailto:{{ profile[4] }}?subject=Portfolio Contact&body=Hi Nithin, I want to connect with you." 
+                class="btn btn--secondary">
+                Email Me
+            </a>
             {% endif %}
             {% if profile[5] %}
             <a href="{{ profile[5] }}" class="btn btn--secondary" target="_blank" rel="noreferrer noopener">GitHub</a>
