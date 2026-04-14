@@ -1994,3 +1994,7 @@ main {
     position: relative;
     z-index: 1;
 }
+.contact__links .btn {
+    position: relative;
+    z-index: 2;
+}
