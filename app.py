@@ -415,6 +415,7 @@ def certifications_page():
 
 
 @app.route("/contact", methods=["GET", "POST"])
+@app.route("/contact", methods=["GET", "POST"])
 def contact_page():
     profile = get_profile()
     next_dest = request.args.get("next", "").strip().lower()
@@ -430,14 +431,32 @@ def contact_page():
                 return redirect(url_for("home") + "#contact")
             return redirect(url_for("contact_page"))
 
+        # Send email notification
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+
+            _sender = os.environ.get("MAIL_USER", "")
+            _password = os.environ.get("MAIL_PASSWORD", "")
+
+            if _sender and _password:
+                msg = MIMEText(f"Name: {name}\nEmail: {email}\n\nMessage:\n{message}")
+                msg["Subject"] = f"Portfolio Contact from {name}"
+                msg["From"] = _sender
+                msg["To"] = "nithinkp368@gmail.com"
+
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                    server.login(_sender, _password)
+                    server.send_message(msg)
+        except Exception as exc:
+            print(f"[WARN] Contact email failed: {exc}")
+
         flash("Thanks for your message! I'll get back to you soon.", "success")
         if next_dest == "home":
             return redirect(url_for("home") + "#contact")
         return redirect(url_for("contact_page"))
 
     return render_template("contact.html", profile=profile)
-
-
 # ---------------------------------------------------------------------------
 # Projects API
 # ---------------------------------------------------------------------------
