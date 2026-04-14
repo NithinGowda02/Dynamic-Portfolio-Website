@@ -445,7 +445,9 @@ def contact_page():
                 msg["From"] = _sender
                 msg["To"] = "nithinkp368@gmail.com"
 
-                with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+                    server.ehlo()
+                    server.starttls()
                     server.login(_sender, _password)
                     server.send_message(msg)
         except Exception as exc:
