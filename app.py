@@ -36,17 +36,36 @@ def _require_cloudinary() -> None:
             "CLOUDINARY_URL is required for uploads. This app no longer supports local file storage."
         )
 
-
 def _cloudinary_upload(file_obj, folder: str, resource_type: str = "auto") -> str:
     _require_cloudinary()
-    result = cloudinary.uploader.upload(
-        file_obj,
+
+    # Read bytes from Werkzeug FileStorage or any file-like object
+    if hasattr(file_obj, 'read'):
+        file_data = file_obj.read()
+        filename = getattr(file_obj, 'filename', None)
+    else:
+        file_data = file_obj
+        filename = None
+
+    upload_kwargs = dict(
         folder=folder,
         resource_type=resource_type,
         use_filename=True,
         unique_filename=True,
         overwrite=False,
     )
+
+    # Explicitly preserve the original filename so Cloudinary keeps the extension
+    if filename:
+        upload_kwargs["public_id"] = os.path.splitext(filename)[0]
+        # For raw uploads (PDFs), explicitly set the format
+        if resource_type == "raw":
+            ext = os.path.splitext(filename)[1].lstrip(".")
+            if ext:
+                upload_kwargs["format"] = ext  # e.g. "pdf"
+
+    result = cloudinary.uploader.upload(file_data, **upload_kwargs)
+
     url = (result or {}).get("secure_url")
     if not url:
         raise RuntimeError("Cloudinary upload failed: no secure_url")
