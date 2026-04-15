@@ -26,11 +26,6 @@ body {
     height: 100%;
 }
 
-html {
-    overflow-x: hidden;
-    overflow-x: clip;
-}
-
 body {
     font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Roboto", sans-serif;
     color: var(--text);
@@ -39,7 +34,6 @@ body {
         linear-gradient(135deg, #05070f, #070a12 60%, #05070f);
     min-height: 100vh;
     overflow-x: hidden;
-    overflow-x: clip;
     scroll-behavior: smooth;
     display: flex;
     flex-direction: column;
@@ -1775,8 +1769,8 @@ main {
     body.nav-js .nav__list {
         position: fixed;
         top: 72px;
-        right: 0;
-        width: min(84vw, 320px);
+        right: -100%;
+        width: 260px;
         height: calc(100vh - 72px);
         flex-direction: column;
         padding: 24px;
@@ -1784,13 +1778,11 @@ main {
         background: rgba(5, 7, 15, 0.85);
         border-left: 1px solid rgba(255, 255, 255, 0.08);
         backdrop-filter: blur(18px);
-        transform: translateX(110%);
-        transition: transform var(--transition);
-        will-change: transform;
+        transition: right var(--transition);
     }
 
     body.nav-js .nav__list.open {
-        transform: translateX(0);
+        right: 0;
     }
 
     .nav__item {
