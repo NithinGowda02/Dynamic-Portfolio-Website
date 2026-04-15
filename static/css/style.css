@@ -1102,13 +1102,14 @@ main {
     border: 1px solid rgba(255, 255, 255, 0.14);
     background: rgba(255, 255, 255, 0.04);
     box-shadow: 0 14px 40px rgba(0, 0, 0, 0.25);
+    width: 100%; /* Ensure full width */
+    aspect-ratio: 16 / 9; /* Maintain consistent aspect ratio for responsive scaling */
 }
-
-/* Slider arrows removed; homepage thumbnails slider uses dots + auto-advance (previous behavior). */
 
 .project-slider__track {
     display: flex;
     transition: transform 0.6s ease;
+    height: 100%; /* Fill the slider height */
 }
 
 .slide {
@@ -1116,18 +1117,17 @@ main {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 18px;
+    padding: 0; /* Remove padding to allow full image fit */
+    height: 100%; /* Ensure slide fills height */
 }
 
 .slide img {
     width: 100%;
-    height: auto;
-    max-width: 840px;
-    max-height: 420px;
+    height: 100%;
     border-radius: 18px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
-    object-fit: contain;
+    object-fit: contain; /* Fit entire image inside without cropping or distortion */
     background: rgba(5, 7, 15, 0.85);
 }
 
