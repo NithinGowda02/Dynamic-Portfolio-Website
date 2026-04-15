@@ -26,6 +26,11 @@ body {
     height: 100%;
 }
 
+html {
+    overflow-x: hidden;
+    overflow-x: clip;
+}
+
 body {
     font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Roboto", sans-serif;
     color: var(--text);
@@ -34,6 +39,7 @@ body {
         linear-gradient(135deg, #05070f, #070a12 60%, #05070f);
     min-height: 100vh;
     overflow-x: hidden;
+    overflow-x: clip;
     scroll-behavior: smooth;
     display: flex;
     flex-direction: column;
@@ -654,6 +660,20 @@ main {
     font-weight: 600;
     letter-spacing: 0.01em;
     transition: transform var(--transition), box-shadow var(--transition), border var(--transition);
+}
+.cert-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.btn--download {
+    background-color: #16a34a;
+    color: white;
+}
+
+.btn--download:hover {
+    background-color: #166534;
 }
 
 .skill-badge:hover {
@@ -1769,8 +1789,8 @@ main {
     body.nav-js .nav__list {
         position: fixed;
         top: 72px;
-        right: -100%;
-        width: 260px;
+        right: 0;
+        width: min(84vw, 320px);
         height: calc(100vh - 72px);
         flex-direction: column;
         padding: 24px;
@@ -1778,11 +1798,13 @@ main {
         background: rgba(5, 7, 15, 0.85);
         border-left: 1px solid rgba(255, 255, 255, 0.08);
         backdrop-filter: blur(18px);
-        transition: right var(--transition);
+        transform: translateX(110%);
+        transition: transform var(--transition);
+        will-change: transform;
     }
 
     body.nav-js .nav__list.open {
-        right: 0;
+        transform: translateX(0);
     }
 
     .nav__item {
@@ -1883,4 +1905,87 @@ main {
 .admin-card--coming-soon {
     opacity: 0.6;
     pointer-events: none;
+}
+
+/* ── Admin Panel Mobile Responsiveness ── */
+
+@media (max-width: 980px) {
+    .admin__grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-grid {
+        padding: 36px 16px 50px;
+    }
+
+    .module {
+        padding: 20px 18px 22px;
+    }
+
+    .module--span-2 {
+        grid-column: span 1;
+    }
+
+    .admin__grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-top: 14px;
+    }
+
+    .admin-card {
+        padding: 18px 16px;
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+    }
+
+    .admin-card__icon {
+        font-size: 1.6rem;
+        margin-bottom: 0;
+        flex-shrink: 0;
+    }
+
+    .admin-card__title {
+        font-size: 1.05rem;
+        margin-bottom: 4px;
+    }
+
+    .form__actions {
+        flex-direction: column;
+    }
+
+    .form__actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-grid {
+        padding: 24px 14px 40px;
+        gap: 16px;
+    }
+
+    .admin-card {
+        padding: 14px 14px;
+    }
+
+    .admin-card__icon {
+        font-size: 1.4rem;
+    }
+
+    .admin-card__title {
+        font-size: 1rem;
+    }
+
+    .admin-card__desc {
+        font-size: 0.85rem;
+    }
+
+    .module__title {
+        font-size: 1.5rem;
+    }
 }
