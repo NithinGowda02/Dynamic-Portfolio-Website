@@ -41,8 +41,6 @@
 
             {% if session.get('admin_logged_in') %}
             <li class="nav__item nav__item--mobile-only"><a href="{{ url_for('admin') }}" class="nav__link">Admin</a></li>
-            {% else %}
-            <li class="nav__item nav__item--mobile-only"><a href="{{ url_for('admin_login') }}" class="nav__link">Admin</a></li>
             {% endif %}
         </ul>
     </nav>
@@ -55,8 +53,6 @@
         {% endif %}
         {% if session.get('admin_logged_in') %}
         <a href="{{ url_for('admin') }}" class="btn btn--secondary">Admin</a>
-        {% else %}
-        <a href="{{ url_for('admin_login') }}" class="btn btn--secondary">Admin</a>
         {% endif %}
         <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-controls="mainNav" aria-expanded="false">
             <span class="nav-toggle__bar"></span>

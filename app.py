@@ -570,7 +570,7 @@ def api_projects_delete(project_id: int):
 # Auth
 # ---------------------------------------------------------------------------
 
-@app.route("/admin/login", methods=["GET", "POST"])
+@app.route("/nkp-secure/login", methods=["GET", "POST"])
 def admin_login():
     if "admin_logged_in" in session:
         return redirect(url_for("admin"))
@@ -588,7 +588,7 @@ def admin_login():
     return render_template("admin_login.html")
 
 
-@app.route("/admin/logout")
+@app.route("/nkp-secure/logout")
 def admin_logout():
     session.pop("admin_logged_in", None)
     flash("Logged out successfully!", "success")
