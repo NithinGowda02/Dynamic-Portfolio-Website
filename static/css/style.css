@@ -1888,33 +1888,3 @@ main {
 /* =========================
    PROJECT DETAILS LAYOUT FIX
 ========================= */
-
-.project-card--details {
-    display: flex;
-    gap: 2rem;
-    align-items: flex-start;
-}
-
-/* Image left */
-.project-card--details .project-card__image {
-    flex: 1;
-    margin-bottom: 0; /* remove vertical spacing */
-}
-
-/* Content right */
-.project-card--details .project-card__title,
-.project-card--details .project-card__copy,
-.project-card--details .project-card__tech-badges,
-.project-card--details .project-card__links {
-    flex: 1;
-}
-
-@media (max-width: 768px) {
-    .project-card--details {
-        flex-direction: column;
-    }
-}
-
-.project-card--details:nth-child(even) {
-    flex-direction: row-reverse;
-}

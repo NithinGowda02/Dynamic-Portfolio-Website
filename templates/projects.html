@@ -8,19 +8,58 @@
             <p class="module__subtitle">Building real systems with real impact</p>
         </header>
 
-        {# Slider removed on Projects page; thumbnails slider lives on the Home page only. #}
-
-        <div class=".project-card--details" data-projects-root>
+        <div class="projects__grid projects__grid--details" data-projects-root>
             {% if projects %}
             {% for project in projects %}
+
+            {# ── Resolve image list exactly like the homepage does ── #}
+            {% set imgs = project.images if project.images else ([project.cover_image] if project.cover_image else []) %}
+
             <article class="project-card project-card--details" id="project-{{ project.id }}">
 
+                {# ── Image gallery (same markup / data-attributes as homepage) ── #}
                 {% if imgs %}
                 <div class="project-card__image">
-                    <!-- gallery stays SAME -->
+                    <div class="proj-gallery proj-gallery--large" data-gallery>
+                        <button class="proj-gallery__nav proj-gallery__nav--prev"
+                                type="button" aria-label="Previous image" data-gallery-prev>&lsaquo;</button>
+                        <button class="proj-gallery__nav proj-gallery__nav--next"
+                                type="button" aria-label="Next image"  data-gallery-next>&rsaquo;</button>
+
+                        <div class="proj-gallery__viewport" data-gallery-viewport>
+                            <div class="proj-gallery__track" data-gallery-track>
+                                {% for img in imgs %}
+                                <div class="proj-gallery__slide" data-gallery-slide>
+                                    <img src="{{ asset_url(img) }}"
+                                         alt="{{ project.title }} screenshot {{ loop.index }}"
+                                         loading="lazy">
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        {# Dot indicators #}
+                        <div class="proj-gallery__dots" data-gallery-dots></div>
+
+                        {# Thumbnail strip (only worth showing when there are 2+ images) #}
+                        {% if imgs | length > 1 %}
+                        <div class="proj-gallery__thumbs" data-gallery-thumbs>
+                            {% for img in imgs %}
+                            <button class="proj-gallery__thumb{% if loop.first %} is-active{% endif %}"
+                                    type="button" data-gallery-thumb="{{ loop.index0 }}"
+                                    aria-label="Go to screenshot {{ loop.index }}">
+                                <img src="{{ asset_url(img) }}"
+                                     alt="{{ project.title }} thumbnail {{ loop.index }}"
+                                     loading="lazy">
+                            </button>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endif %}
 
+                {# ── Text content ── #}
                 <div class="project-card__content">
                     <h3 class="project-card__title">{{ project.title }}</h3>
                     <p class="project-card__copy">{{ project.description }}</p>
@@ -35,19 +74,25 @@
 
                     <div class="project-card__links">
                         {% if project.github_link %}
-                        <a href="{{ project.github_link }}" class="btn btn--secondary btn--small" target="_blank">View Code</a>
+                        <a href="{{ project.github_link }}"
+                           class="btn btn--secondary btn--small"
+                           target="_blank" rel="noreferrer noopener">View Code</a>
                         {% endif %}
                         {% if project.live_demo %}
-                        <a href="{{ project.live_demo }}" class="btn btn--primary btn--small" target="_blank">Live Demo</a>
+                        <a href="{{ project.live_demo }}"
+                           class="btn btn--primary btn--small"
+                           target="_blank" rel="noreferrer noopener">Live Demo</a>
                         {% endif %}
                     </div>
                 </div>
 
             </article>
             {% endfor %}
+
             {% else %}
             <div class="empty-state">
-                <p class="empty-state__text">No projects have been added yet. Add them to your database to display them here.</p>
+                <p class="empty-state__text">No projects have been added yet.
+                    Add them via the Admin panel and they will appear here automatically.</p>
             </div>
             {% endif %}
         </div>
