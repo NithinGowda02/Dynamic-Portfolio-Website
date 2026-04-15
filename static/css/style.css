@@ -1241,14 +1241,6 @@ main {
     transform: translateZ(0);
 }
 
-.proj-gallery--card {
-    /* Card gallery keeps the default 16:9 viewport. */
-}
-
-.proj-gallery--large {
-    /* Larger than home cards on desktop, still responsive on mobile */
-}
-
 .proj-gallery--large .proj-gallery__viewport {
     min-height: clamp(240px, 34vw, 560px);
 }
