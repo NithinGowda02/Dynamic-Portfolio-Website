@@ -71,54 +71,5 @@
     </div>
 </section>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const galleries = document.querySelectorAll('[data-gallery]');
-    
-    galleries.forEach(gallery => {
-        const track = gallery.querySelector('[data-gallery-track]');
-        const slides = gallery.querySelectorAll('[data-gallery-slide]');
-        const prevBtn = gallery.querySelector('[data-gallery-prev]');
-        const nextBtn = gallery.querySelector('[data-gallery-next]');
-        const thumbs = gallery.querySelectorAll('[data-gallery-thumb]');
-        
-        if (!track || slides.length === 0) return; // Skip if no track or slides
-        
-        let currentIndex = 0;
-        
-        function updateSlide() {
-            track.style.transform = `translateX(-${currentIndex * 100}%)`;
-            thumbs.forEach((thumb, index) => {
-                thumb.classList.toggle('is-active', index === currentIndex);
-            });
-        }
-        
-        if (prevBtn) {
-            prevBtn.addEventListener('click', () => {
-                currentIndex = (currentIndex - 1 + slides.length) % slides.length;
-                updateSlide();
-            });
-        }
-        
-        if (nextBtn) {
-            nextBtn.addEventListener('click', () => {
-                currentIndex = (currentIndex + 1) % slides.length;
-                updateSlide();
-            });
-        }
-        
-        thumbs.forEach((thumb, index) => {
-            thumb.addEventListener('click', () => {
-                currentIndex = index;
-                updateSlide();
-            });
-        });
-        
-        // Initialize active thumb
-        updateSlide();
-    });
-});
-</script>
-
 <script src="{{ url_for('static', filename='js/projects_api.js', v=static_v) }}" defer></script>
 {% endblock %}
