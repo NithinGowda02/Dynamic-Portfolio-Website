@@ -1364,7 +1364,7 @@ main {
 
 .project-card__image > img {
     width: 100%;
-    height: 100%;
+    height: 150px;
     object-fit: cover;
     display: block;
 }
@@ -1845,6 +1845,8 @@ main {
     }
 }
 
+
+/* Admin Dashboard Styles */
 .admin__grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
