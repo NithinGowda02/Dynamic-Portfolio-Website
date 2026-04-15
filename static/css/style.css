@@ -1888,3 +1888,41 @@ main {
 /* =========================
    PROJECT DETAILS LAYOUT FIX
 ========================= */
+/* ============================================================
+   PROJECTS PAGE — Gallery display fix
+   Add this block to the bottom of style.css
+   (or in a <style> tag inside projects.html before </body>)
+   ============================================================ */
+
+/* 1. On the Projects detail page, remove the fixed 16:9 aspect-ratio
+      so the viewport height is driven by min-height instead.
+      This stops the thin-strip crop seen on the screenshot. */
+.projects__grid--details .proj-gallery__viewport {
+    aspect-ratio: unset;
+    min-height: clamp(260px, 38vw, 600px);
+}
+
+/* 2. The slide itself must fill that viewport height so the track
+      flex children size correctly. */
+.projects__grid--details .proj-gallery__slide {
+    height: clamp(260px, 38vw, 600px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5, 7, 15, 0.85);   /* dark letterbox for contain mode */
+}
+
+/* 3. The image: fill width, respect height, never overflow,
+      use contain so the full screenshot is always visible. */
+.projects__grid--details .proj-gallery__slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+/* 4. Keep nav arrows vertically centred relative to the
+      viewport (not the whole gallery incl. thumb strip). */
+.projects__grid--details .proj-gallery__nav {
+    top: calc(clamp(260px, 38vw, 600px) / 2);
+}
