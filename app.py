@@ -161,23 +161,23 @@ ALLOWED_EXTENSIONS_IMG = {"png", "jpg", "jpeg", "gif", "svg"}
 
 
 # ---------------------------------------------------------------------------
-# Database (PostgreSQL via DATABASE_URL only)
+# Database (PostgreSQL via Neon — DATABASE_URL only)
 # ---------------------------------------------------------------------------
-database_url = get_database_uri()
-
-if database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
+database_url = get_database_uri()  # handles postgres:// → postgresql:// and sslmode
 
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# FIX 4: On Render's free-tier Postgres the SSL cert is self-signed.
-# "require" mode validates the server but not the CA — correct for Render.
-# Also add pool_recycle so stale connections are refreshed (Render idles
-# connections after ~5 min, causing "SSL connection has been closed" errors).
+# Neon is serverless — connections can be dropped between requests.
+# pool_pre_ping:  tests connection before use, auto-reconnects if dropped.
+# pool_recycle:   recycles connections every 280s (Neon idles ~300s on free tier).
+# pool_size / max_overflow: Neon free tier allows max 10 concurrent connections.
+# sslmode require: mandatory for Neon.
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
-    "pool_recycle": 280,          # recycle before Render's ~300 s idle timeout
+    "pool_recycle": 280,
+    "pool_size": 5,
+    "max_overflow": 2,
     "connect_args": {"sslmode": "require"},
 }
 
